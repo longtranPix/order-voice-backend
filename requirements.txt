@@ -1,5 +1,6 @@
 fastapi
-uvicorn[standard]
+uvicorn
+requests
 faster-whisper
-transformers
-torch
+pydantic
+python-multipart  # để hỗ trợ UploadFile
