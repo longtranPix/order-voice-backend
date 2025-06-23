@@ -31,6 +31,7 @@ app.add_middleware(
 class Account(BaseModel):
     username: str
     password: str
+    business_name: str
 
 class OrderDetail(BaseModel):
     product_name: str
@@ -46,54 +47,6 @@ class CreateOrderRequest(BaseModel):
     order_details: List[OrderDetail]
     order_table_id: str
     detail_table_id: str
-
-# def handle_teable_api_call(method: str, url: str, **kwargs) -> Dict[str, Any]:
-#     try:
-#         logger.info(f"Making {method} request to: {url}")
-#         response = requests.request(method, url, **kwargs)
-#         logger.info(f"Response status: {response.status_code}")
-#         logger.info(f"Response headers: {dict(response.headers)}")
-#         try:
-#             response_data = response.json()
-#             logger.info(f"Response data: {response_data}")
-#         except json.JSONDecodeError:
-#             response_data = {"raw_response": response.text}
-#             logger.warning(f"Failed to parse JSON response: {response.text}")
-#         if 200 <= response.status_code < 300:
-#             return {"success": True, "status_code": response.status_code, "data": response_data}
-#         else:
-#             error_message = f"API call failed with status {response.status_code}"
-#             if isinstance(response_data, dict) and "message" in response_data:
-#                 error_message += f": {response_data['message']}"
-#             logger.error(f"API Error: {error_message}")
-#             logger.error(f"Full response: {response_data}")
-#             return {"success": False, "status_code": response.status_code, "error": error_message, "details": response_data}
-#     except requests.exceptions.RequestException as e:
-#         error_message = f"Network error during API call: {str(e)}"
-#         logger.error(error_message)
-#         return {"success": False, "error": error_message, "details": {"exception_type": type(e).__name__, "exception_message": str(e)}}
-#     except Exception as e:
-#         error_message = f"Unexpected error during API call: {str(e)}"
-#         logger.error(error_message)
-#         return {"success": False, "error": error_message, "details": {"exception_type": type(e).__name__, "exception_message": str(e)}}
-
-# def create_table(base_id: str, payload: dict, headers: dict) -> Optional[str]:
-#     url = f"{TEABLE_BASE_URL}/base/{base_id}/table/"
-#     response = requests.post(url, data=json.dumps(payload), headers=headers)
-#     if response.status_code != 201:
-#         logger.error(f"Failed to create table: {response.text}")
-#         return None
-#     return response.json()["id"]
-
-# def update_user_table_id(record_id: str, table_id: str, headers: dict) -> bool:
-#     update_url = f"{TEABLE_BASE_URL}/table/{TEABLE_TABLE_ID}/record/{record_id}"
-#     update_payload = json.dumps({
-#         "fieldKeyType": "dbFieldName",
-#         "typecast": True,
-#         "record": {"fields": {"table_id": table_id}}
-#     })
-#     response = requests.patch(update_url, data=update_payload, headers=headers)
-#     return response.status_code == 200
 
 def handle_teable_api_call(method: str, url: str, **kwargs) -> Dict[str, Any]:
     try:
@@ -208,57 +161,62 @@ async def signin(account: Account):
 
 @app.post("/create-order")
 async def create_order(data: CreateOrderRequest):
-    headers = {
-        "Authorization": TEABLE_TOKEN,
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-    }
+    try:
+        headers = {
+            "Authorization": TEABLE_TOKEN,
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
 
-    # Tính tổng giá trị
-    total_temp = sum(item.unit_price * item.quantity for item in data.order_details)
-    total_vat = sum(item.unit_price * item.quantity * item.vat / 100 for item in data.order_details)
-    total_after_vat = total_temp + total_vat
+        total_temp = sum(item.unit_price * item.quantity for item in data.order_details)
+        total_vat = sum(item.unit_price * item.quantity * item.vat / 100 for item in data.order_details)
+        total_after_vat = total_temp + total_vat
 
-    # Step 1: Create detail records
-    detail_payload = {
-        "fieldKeyType": "dbFieldName",
-        "typecast": True,
-        "records": [{"fields": d.dict()} for d in data.order_details]
-    }
-    detail_url = f"{TEABLE_BASE_URL}/table/{data.detail_table_id}/record"
-    response_detail = requests.post(detail_url, data=json.dumps(detail_payload), headers=headers)
-    if response_detail.status_code != 201:
-        return {"status": "error", "message": "Failed to create order details", "response": response_detail.text}
+        detail_payload = {
+            "fieldKeyType": "dbFieldName",
+            "typecast": True,
+            "records": [{"fields": d.dict()} for d in data.order_details]
+        }
+        detail_url = f"{TEABLE_BASE_URL}/table/{data.detail_table_id}/record"
+        response_detail = requests.post(detail_url, data=json.dumps(detail_payload), headers=headers)
+        if response_detail.status_code != 201:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to create order details: {response_detail.text}")
 
-    detail_records = response_detail.json().get("records", [])
-    detail_ids = [r["id"] for r in detail_records]
+        detail_records = response_detail.json().get("records", [])
+        detail_ids = [r["id"] for r in detail_records]
 
-    # Step 2: Create order record with linked details and totals
-    order_payload = {
-        "fieldKeyType": "dbFieldName",
-        "typecast": True,
-        "records": [{
-            "fields": {
-                "customer_name": data.customer_name,
-                "invoice_details": detail_ids,
-                "total_temp": total_temp,
-                "total_vat": total_vat,
-                "total_after_vat": total_after_vat
-            }
-        }]
-    }
-    order_url = f"{TEABLE_BASE_URL}/table/{data.order_table_id}/record"
-    response_order = requests.post(order_url, data=json.dumps(order_payload), headers=headers)
-    if response_order.status_code != 201:
-        return {"status": "error", "message": "Failed to create order", "response": response_order.text}
+        order_payload = {
+            "fieldKeyType": "dbFieldName",
+            "typecast": True,
+            "records": [{
+                "fields": {
+                    "customer_name": data.customer_name,
+                    "invoice_details": detail_ids,
+                    "total_temp": total_temp,
+                    "total_vat": total_vat,
+                    "total_after_vat": total_after_vat,
+                    "invoice_state": data.invoice_state
+                }
+            }]
+        }
+        order_url = f"{TEABLE_BASE_URL}/table/{data.order_table_id}/record"
+        response_order = requests.post(order_url, data=json.dumps(order_payload), headers=headers)
+        if response_order.status_code != 201:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Failed to create order: {response_order.text}")
 
-    return {
-        "status": "success",
-        "order": response_order.json(),
-        "total_temp": total_temp,
-        "total_vat": total_vat,
-        "total_after_vat": total_after_vat
-    }
+        return {
+            "status": "success",
+            "order": response_order.json(),
+            "total_temp": total_temp,
+            "total_vat": total_vat,
+            "total_after_vat": total_after_vat,
+            "invoice_state": data.invoice_state
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error while creating order: {str(e)}")
+
 
 @app.post("/signup")
 async def signup(account: Account):
@@ -274,16 +232,16 @@ async def signup(account: Account):
         if not check_result["success"]:
             return {"status": "error", "message": f"Failed to check existing account: {check_result['error']}", "status_code": check_result.get("status_code")}
         if check_result["data"].get("records"):
-            return {"status": "error", "message": "Account with this username already exists"}
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account with this username already exists")
 
         create_user_payload = {
             "fieldKeyType": "dbFieldName",
             "typecast": True,
-            "records": [{"fields": {"username": account.username, "password": account.password}}]
+            "records": [{"fields": {"username": account.username, "password": account.password, "business_name": account.business_name}}]
         }
         response_account = requests.post(teable_url, data=json.dumps(create_user_payload), headers=headers)
         if response_account.status_code != 201:
-            return {"status": "error", "message": "Failed to create account."}
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create account.")
         record_id = response_account.json()["records"][0]["id"]
 
         space_id = requests.post(f"{TEABLE_BASE_URL}/space", data=json.dumps({"name": f"{account.username}_space"}), headers=headers).json()["id"]
@@ -299,7 +257,7 @@ async def signup(account: Account):
             {"type": "number", "name": "Thành Tiền", "dbFieldName": "final_total"}
         ], "fieldKeyType": "dbFieldName", "records": []}, headers)
         if not detail_table_id:
-            return {"status": "error", "message": "Failed to create order detail table."}
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create order detail table.")
 
         order_table_id = create_table(base_id, {"name": "Đơn Hàng", "dbTableName": "orders", "description": "Bảng lưu thông tin các đơn hàng", "icon": "📦", "fields": [
             {"type": "autoNumber", "name": "Số đơn hàng", "dbFieldName": "order_number"},
@@ -312,7 +270,7 @@ async def signup(account: Account):
             {"type": "singleLineText", "name": "Mã hoá đơn", "dbFieldName": "invoice_code"}
         ], "fieldKeyType": "dbFieldName", "records": []}, headers)
         if not order_table_id:
-            return {"status": "error", "message": "Failed to create order table."}
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create order table.")
 
         invoice_info_table_id = create_table(base_id, {
             "name": "Invoice Table",
@@ -328,7 +286,7 @@ async def signup(account: Account):
             "records": []
         }, headers)
         if not invoice_info_table_id:
-            return {"status": "error", "message": "Failed to create invoice template table."}
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create invoice template table.")
 
         update_fields = {
             "table_order_detail_id": detail_table_id,
@@ -336,7 +294,7 @@ async def signup(account: Account):
             "table_invoice_info_id": invoice_info_table_id
         }
         if not update_user_table_id(record_id, update_fields, headers):
-            return {"status": "error", "message": "Account created, but failed to update with table IDs."}
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Account created, but failed to update with table IDs.")
 
         return {
             "status": "success",
@@ -348,6 +306,8 @@ async def signup(account: Account):
         }
 
 
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"status": "error", "message": "Unexpected error", "error": str(e)}
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Unexpected error during signup: {str(e)}")
 
