@@ -1,8 +1,47 @@
 version: '3.8'
 
 services:
-  whisper-api:
-    build: .
+  order-voice-api:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: order-voice-backend
     ports:
-      - "8000:8000"
+      - "8001:8000"
+    env_file:
+      - .env
+    environment:
+      # Override any environment variables if needed
+      - DEBUG=false
+
+    volumes:
+      # Mount volume for model cache to persist between container restarts
+      - whisper_models:/app/models
+      # Mount volume for logs
+      - app_logs:/app/logs
+
     restart: unless-stopped
+
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  whisper_models:
+    driver: local
+  app_logs:
+    driver: local

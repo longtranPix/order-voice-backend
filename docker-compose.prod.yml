@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  order-voice-api:
+    build: 
+      context: .
+      dockerfile: dockerfile
+    container_name: order-voice-backend-prod
+    ports:
+      - "8001:8000"
+    env_file:
+      - .env
+    environment:
+      # Production overrides
+      - DEBUG=false
+    
+    volumes:
+      # Mount volume for model cache to persist between container restarts
+      - whisper_models_prod:/app/models
+      # Mount volume for logs
+      - app_logs_prod:/app/logs
+    
+    restart: unless-stopped
+    
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Optional: Add nginx reverse proxy for production
+  nginx:
+    image: nginx:alpine
+    container_name: order-voice-nginx
+    ports:
+      - "8001:80"
+      - "8443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - order-voice-api
+    restart: unless-stopped
+
+volumes:
+  whisper_models_prod:
+    driver: local
+  app_logs_prod:
+    driver: local

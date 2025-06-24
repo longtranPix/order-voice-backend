@@ -4,9 +4,9 @@ from typing import List
 class Settings:
     """Application settings and configuration."""
 
-    # API Configuration
+    # API Configuration - will be loaded from environment variables
     TEABLE_BASE_URL: str = "https://app.teable.io/api"
-    TEABLE_TOKEN: str = "Bearer teable_accT1cTLbgDxAw73HQa_xnRuWiEDLat6qqpUDsL4QEzwnKwnkU9ErG7zgJKJswg="
+    TEABLE_TOKEN: str = ""  # Will be loaded from .env
     TEABLE_TABLE_ID: str = "tblv9Ou1thzbETynKn1"
 
     # Invoice API Configuration
@@ -37,6 +37,10 @@ class Settings:
         self.CREATE_INVOICE_URL = os.getenv("CREATE_INVOICE_URL", self.CREATE_INVOICE_URL)
         self.GET_PDF_URL = os.getenv("GET_PDF_URL", self.GET_PDF_URL)
         self.DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
+        # Validate required environment variables
+        if not self.TEABLE_TOKEN:
+            raise ValueError("TEABLE_TOKEN environment variable is required")
 
         # Parse CORS origins from environment
         cors_origins = os.getenv("ALLOWED_ORIGINS", "*")

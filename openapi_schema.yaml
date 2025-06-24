@@ -1,0 +1,341 @@
+openapi: 3.0.0
+info:
+  title: Order Voice Backend API
+  description: API for order processing, transcription, and invoice generation
+  version: 1.0.0
+servers:
+  - url: https://api.example.com
+    description: Production server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Account:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          minLength: 3
+        password:
+          type: string
+          minLength: 6
+    
+    SignUp:
+      type: object
+      required:
+        - username
+        - password
+        - business_name
+      properties:
+        username:
+          type: string
+          minLength: 3
+        password:
+          type: string
+          minLength: 6
+        business_name:
+          type: string
+          minLength: 2
+    
+    AuthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        accessToken:
+          type: string
+        message:
+          type: string
+        record:
+          type: array
+    
+    OrderDetail:
+      type: object
+      properties:
+        ten_hang_hoa:
+          type: string
+        so_luong:
+          type: integer
+          default: 1
+        don_gia:
+          type: number
+          nullable: true
+    
+    CreateOrderRequest:
+      type: object
+      required:
+        - customer_name
+        - invoice_state
+        - order_details
+        - order_table_id
+        - detail_table_id
+      properties:
+        customer_name:
+          type: string
+          minLength: 2
+        invoice_state:
+          type: boolean
+        order_details:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderDetail'
+          minItems: 1
+        order_table_id:
+          type: string
+        detail_table_id:
+          type: string
+    
+    OrderResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        order:
+          type: object
+        total_temp:
+          type: number
+        total_vat:
+          type: number
+        total_after_vat:
+          type: number
+        invoice_state:
+          type: boolean
+    
+    InvoiceRequest:
+      type: object
+      required:
+        - username
+        - order_table_id
+        - record_order_id
+        - invoice_payload
+      properties:
+        username:
+          type: string
+          minLength: 1
+        order_table_id:
+          type: string
+        record_order_id:
+          type: string
+        invoice_payload:
+          type: object
+          required:
+            - generalInvoiceInfo
+          properties:
+            generalInvoiceInfo:
+              type: object
+              required:
+                - templateCode
+              properties:
+                templateCode:
+                  type: string
+    
+    InvoiceResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+        invoice_no:
+          type: string
+        file_name:
+          type: string
+    
+    TranscriptionResponse:
+      type: object
+      properties:
+        language:
+          type: string
+        transcription:
+          type: string
+        extracted:
+          type: object
+
+paths:
+  /auth/signin:
+    post:
+      summary: User authentication
+      tags:
+        - authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Account'
+            example:
+              username: "user123"
+              password: "password123"
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                status: "success"
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                message: "Authentication successful"
+                record: []
+        '401':
+          description: Authentication failed
+  
+  /auth/signup:
+    post:
+      summary: User registration
+      tags:
+        - authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignUp'
+            example:
+              username: "newuser"
+              password: "password123"
+              business_name: "My Business"
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid input or user already exists
+  
+  /transcription/transcribe:
+    post:
+      summary: Transcribe audio file and extract order information
+      tags:
+        - transcription
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Audio file to transcribe
+      responses:
+        '200':
+          description: Successful transcription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionResponse'
+              example:
+                language: "vi"
+                transcription: "Tôi muốn đặt một cà phê sữa đá giá 35 nghìn và một bánh mì thịt giá 25 nghìn"
+                extracted: [
+                  {"ten_hang_hoa": "cà phê sữa đá", "so_luong": 1, "don_gia": 35000},
+                  {"ten_hang_hoa": "bánh mì thịt", "so_luong": 1, "don_gia": 25000}
+                ]
+        '400':
+          description: Invalid file format or empty file
+        '500':
+          description: Transcription failed
+  
+  /orders/create:
+    post:
+      summary: Create a new order
+      tags:
+        - orders
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+            example:
+              customer_name: "Nguyễn Văn A"
+              invoice_state: true
+              order_details: [
+                {"ten_hang_hoa": "cà phê sữa đá", "so_luong": 2, "don_gia": 35000},
+                {"ten_hang_hoa": "bánh mì thịt", "so_luong": 1, "don_gia": 25000}
+              ]
+              order_table_id: "tbl123456789"
+              detail_table_id: "tbl987654321"
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          description: Invalid input
+        '401':
+          description: Unauthorized
+  
+  /invoices/generate:
+    post:
+      summary: Generate invoice using Viettel API
+      tags:
+        - invoices
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvoiceRequest'
+            example:
+              username: "user123"
+              order_table_id: "tbl123456789"
+              record_order_id: "rec123456789"
+              invoice_payload: {
+                "generalInvoiceInfo": {
+                  "templateCode": "01GTKT0/001",
+                  "invoiceType": "01GTKT",
+                  "currencyCode": "VND"
+                },
+                "buyerInfo": {
+                  "buyerName": "Nguyễn Văn A",
+                  "buyerLegalName": "Công ty TNHH A"
+                },
+                "payments": [
+                  {
+                    "paymentMethodName": "TM/CK"
+                  }
+                ],
+                "items": [
+                  {
+                    "lineNumber": 1,
+                    "itemName": "Cà phê sữa đá",
+                    "unitPrice": 35000,
+                    "quantity": 2,
+                    "itemTotalAmountWithoutVat": 70000,
+                    "vatPercentage": 10
+                  }
+                ]
+              }
+      responses:
+        '200':
+          description: Invoice generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceResponse'
+              example:
+                detail: "Invoice generated successfully"
+                invoice_no: "0000123"
+                file_name: "invoice_0000123.pdf"
+        '400':
+          description: Invalid input or missing user data
+        '401':
+          description: Unauthorized
+        '500':
+          description: Invoice generation failed
