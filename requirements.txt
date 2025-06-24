@@ -1,6 +1,7 @@
 fastapi
 uvicorn
-requests
+httpx  # Async HTTP client (replaces requests)
 faster-whisper
 pydantic
-python-multipart  # để hỗ trợ UploadFile
+python-multipart  # For UploadFile support
+bcrypt  # For password hashing
