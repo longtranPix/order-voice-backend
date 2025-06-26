@@ -4,3 +4,4 @@ requests
 faster-whisper
 pydantic
 python-multipart  # để hỗ trợ UploadFile
+python-dotenv  # để load environment variables từ .env file

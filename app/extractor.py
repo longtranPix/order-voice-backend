@@ -157,14 +157,15 @@
 
 import requests
 import json
+from app.core.config import settings
 
 def extract_info_from_text(text: str):
     try:
-        
+
         response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
-            "Authorization": "Bearer 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",
+            "Authorization": f"Bearer {settings.OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         },
         data=json.dumps({
