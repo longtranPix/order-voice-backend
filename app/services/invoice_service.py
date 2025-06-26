@@ -70,7 +70,7 @@ def generate_invoice_service(data: InvoiceRequest) -> dict:
     # Step 4: Update order in system
     upload_attachment_to_teable(data.field_attachment_id, data.record_order_id, data.order_table_id, file_to_bytes, filename)
     update_fields = {
-        "invoice_no": invoice_no,
+        "invoice_code": invoice_no,
         "invoice_state": True
     }
 

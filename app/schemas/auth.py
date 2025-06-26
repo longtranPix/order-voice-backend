@@ -5,6 +5,5 @@ class Account(BaseModel):
     password: str
 
 class SignUp(BaseModel):
-    username: str
+    username: str  # This will be used as taxcode
     password: str
-    business_name: str
