@@ -6,4 +6,4 @@ class InvoiceRequest(BaseModel):
     order_table_id: str
     record_order_id: str
     field_attachment_id: str
-    invoice_payload: Dict[str, Any]
+    invoice_payload: Dict[str, Any]  # Will be automatically populated with invoice config

@@ -141,7 +141,7 @@ async def signup_service(account: SignUp) -> dict:
         base_id = requests.post(f"{settings.TEABLE_BASE_URL}/base", data=json.dumps({"spaceId": space_id, "name": base_name, "icon": "📊"}), headers=headers).json()["id"]
 
         # Create detail table
-        detail_table_id = create_table(base_id, {"name": "Chi Tiết Hoá Đơn", "dbTableName": "invoice_details", "description": "Chi tiết đơn hàng", "icon": "🧾", "fields": [
+        detail_table_id = create_table(base_id, {"name": "Chi Tiết Hoá Đơn", "description": "Chi tiết đơn hàng", "icon": "🧾", "fields": [
             {"type": "autoNumber", "name": "Số đơn hàng chi tiết", "dbFieldName": "number_order_detail"},
             {"type": "longText", "name": "Tên Hàng Hoá", "dbFieldName": "product_name"},
             {"type": "number", "name": "Đơn Giá", "dbFieldName": "unit_price"},
@@ -154,8 +154,8 @@ async def signup_service(account: SignUp) -> dict:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không thể tạo bảng chi tiết đơn hàng")
 
         # Create order table and get the invoice_file field ID
-        order_table_payload = {"name": "Đơn Hàng", "dbTableName": "orders", "description": "Bảng lưu thông tin các đơn hàng", "icon": "📦", "fields": [
-            {"type": "autoNumber", "name": "Số đơn hàng", "dbFieldName": "order_number"},
+        order_table_payload = {"name": "Đơn Hàng", "description": "Bảng lưu thông tin các đơn hàng", "icon": "📦", "fields": [
+            {"type": "formula", "name": "Số đơn hàng", "dbFieldName": "order_number", "options": {"expression": "concatenate('DH-', DATETIME_FORMAT(CREATED_TIME(), 'DDMMYYYY'), '-', AUTO_NUMBER())"}},
             {"type": "longText", "name": "Tên Khách Hàng", "dbFieldName": "customer_name"},
             {"type": "link", "name": "Chi Tiết Hóa Đơn", "dbFieldName": "invoice_details", "options": {"foreignTableId": detail_table_id, "relationship": "oneMany"}},
             {"type": "checkbox", "name": "Xuất hoá đơn", "dbFieldName": "invoice_state"},
