@@ -26,10 +26,28 @@ Khi người dùng đăng ký tài khoản mới trong hệ thống, hệ thốn
 
 ---
 
-### 2. ⚖️ **Bảng Đơn Vị Tính Chuyển Đổi (Unit Conversions Table)**
+### 2. 🏭 **Bảng Nhà Cung Cấp (Supplier Table)**
 
-**Tên bảng:** `Đơn Vị Tính Chuyển Đổi`  
-**Mô tả:** Quản lý các đơn vị tính và tỷ lệ chuyển đổi  
+**Tên bảng:** `Nhà Cung Cấp`
+**Mô tả:** Quản lý thông tin nhà cung cấp
+**Icon:** 🏭
+
+#### Các Trường Dữ Liệu:
+- **Mã nhà cung cấp** (`supplier_number`) - Tự động tăng
+- **Tên nhà cung cấp** (`supplier_name`) - Văn bản dài
+- **Địa chỉ** (`address`) - Văn bản dài
+
+#### Chức Năng:
+- Lưu trữ thông tin chi tiết nhà cung cấp
+- Tự động tạo mã nhà cung cấp duy nhất
+- Liên kết với phiếu nhập kho
+
+---
+
+### 3. ⚖️ **Bảng Đơn Vị Tính Chuyển Đổi (Unit Conversions Table)**
+
+**Tên bảng:** `Đơn Vị Tính Chuyển Đổi`
+**Mô tả:** Quản lý các đơn vị tính và tỷ lệ chuyển đổi
 **Icon:** ⚖️
 
 #### Các Trường Dữ Liệu:
@@ -47,10 +65,10 @@ Khi người dùng đăng ký tài khoản mới trong hệ thống, hệ thốn
 
 ---
 
-### 3. 🛍️ **Bảng Sản Phẩm (Product Table)**
+### 4. 🛍️ **Bảng Sản Phẩm (Product Table)**
 
-**Tên bảng:** `Sản Phẩm`  
-**Mô tả:** Quản lý thông tin sản phẩm  
+**Tên bảng:** `Sản Phẩm`
+**Mô tả:** Quản lý thông tin sản phẩm
 **Icon:** 📦
 
 #### Các Trường Dữ Liệu:
@@ -70,7 +88,7 @@ Khi người dùng đăng ký tài khoản mới trong hệ thống, hệ thốn
 
 ---
 
-### 4. 🧾 **Bảng Chi Tiết Đơn Hàng (Order Details Table)**
+### 5. 🧾 **Bảng Chi Tiết Đơn Hàng (Order Details Table)**
 
 **Tên bảng:** `Chi Tiết Hoá Đơn`  
 **Mô tả:** Chi tiết từng sản phẩm trong đơn hàng  

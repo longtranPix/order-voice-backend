@@ -5,7 +5,7 @@ from app.extractor import extract_info_from_text
 # Initialize Whisper model
 whisper_model = WhisperModel("small", compute_type="int8", device="cpu")
 
-async def transcribe_and_extract_service(file_content: bytes) -> dict:
+async def transcribe_and_extract_service(file_content: bytes, current_user: str) -> dict:
     """Transcribe audio file and extract information"""
     try:
         with NamedTemporaryFile(suffix=".webm", delete=True) as temp_audio:

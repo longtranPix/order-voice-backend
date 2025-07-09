@@ -1,17 +1,21 @@
 import json
 import requests
+import logging
 from fastapi import HTTPException
 from app.core.config import settings
 from app.services.teable_service import upload_attachment_to_teable, update_user_table_id
 from app.schemas.invoices import InvoiceRequest
 
-def generate_invoice_service(data: InvoiceRequest) -> dict:
+logger = logging.getLogger(__name__)
+
+def generate_invoice_service(data: InvoiceRequest, current_user: str) -> dict:
     """Handle invoice generation"""
     # Step 1: Get user configuration including invoice_token and invoice config
+    # Use current_user from token instead of data.username for security
     url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record"
     params = {
         "fieldKeyType": "dbFieldName",
-        "filter": json.dumps({"conjunction":"and","filterSet":[{"fieldId":"username","operator":"is","value":f"{data.username}"}]})
+        "filter": json.dumps({"conjunction":"and","filterSet":[{"fieldId":"username","operator":"is","value":f"{current_user}"}]})
     }
 
     try:
@@ -34,6 +38,14 @@ def generate_invoice_service(data: InvoiceRequest) -> dict:
         invoice_type = user_record.get("invoice_type")
         template_code = user_record.get("template_code")
         invoice_series = user_record.get("invoice_series")
+
+        # Get dynamic API URLs from user configuration with fallback to static config
+        domain_api_invoice = user_record.get("domain_api_invoice") or settings.CREATE_INVOICE_URL
+        domain_api_get_file = user_record.get("domain_api_get_file") or settings.GET_PDF_URL
+
+        # Log which URLs are being used
+        logger.info(f"Using invoice API: {domain_api_invoice}")
+        logger.info(f"Using PDF API: {domain_api_get_file}")
 
         if not all([invoice_type, template_code, invoice_series]):
             raise HTTPException(status_code=400, detail="Thiếu thông tin cấu hình hóa đơn (invoice_type, template_code, invoice_series)")
@@ -62,7 +74,9 @@ def generate_invoice_service(data: InvoiceRequest) -> dict:
     }
 
     try:
-        create_response = requests.post(f"{settings.CREATE_INVOICE_URL}/{data.username}", json=invoice_payload, headers=headers)
+        # Use dynamic invoice API URL from user configuration
+        create_invoice_url = f"{domain_api_invoice}/{data.username}"
+        create_response = requests.post(create_invoice_url, json=invoice_payload, headers=headers)
         create_response.raise_for_status()
         create_result = create_response.json()
     except Exception as e:
@@ -84,7 +98,8 @@ def generate_invoice_service(data: InvoiceRequest) -> dict:
     }
 
     try:
-        pdf_response = requests.post(settings.GET_PDF_URL, json=pdf_payload, headers=headers)
+        # Use dynamic PDF API URL from user configuration
+        pdf_response = requests.post(domain_api_get_file, json=pdf_payload, headers=headers)
         pdf_response.raise_for_status()
         pdf_result = pdf_response.json()
     except Exception as e:

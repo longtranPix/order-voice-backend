@@ -27,7 +27,7 @@ def handle_teable_api_call(method: str, url: str, **kwargs) -> Dict[str, Any]:
         if 200 <= response.status_code < 300:
             return {"success": True, "status_code": response.status_code, "data": response_data}
         else:
-            error_message = f"Gọi API thất bại với mã trạng thái {response.status_code}"
+            error_message = f"Gọi API thất bại với mã trạng thái {response.status_code} {response.reason}"
             if isinstance(response_data, dict) and "detail" in response_data:
                 error_message += f": {response_data['detail']}"
             logger.error(f"Lỗi: {error_message}")
@@ -44,12 +44,54 @@ def handle_teable_api_call(method: str, url: str, **kwargs) -> Dict[str, Any]:
 
 def create_table(base_id: str, payload: dict, headers: dict) -> Optional[str]:
     """Create a table in Teable"""
-    url = f"{settings.TEABLE_BASE_URL}/base/{base_id}/table/"
-    response = requests.post(url, data=json.dumps(payload), headers=headers)
-    if response.status_code != 201:
-        logger.error(f"Không thể tạo bảng: {response.text}")
+    try:
+        url = f"{settings.TEABLE_BASE_URL}/base/{base_id}/table/"
+        response = requests.post(url, data=json.dumps(payload), headers=headers)
+        if response.status_code != 201:
+            logger.error(f"Không thể tạo bảng: {response.text}")
+            return None
+    except Exception as e:
+        logger.error(f"Không thể tạo bảng: {str(e)}")
         return None
     return response.json()["id"]
+
+def get_field_id_by_name(table_id: str, field_name: str, headers: dict) -> Optional[str]:
+    """Get field ID by field name"""
+    try:
+        fields_url = f"{settings.TEABLE_BASE_URL}/table/{table_id}/field"
+        response = requests.get(fields_url, headers=headers)
+
+        if response.status_code != 200:
+            logger.error(f"Không thể lấy thông tin field: {response.text}")
+            return None
+
+        fields = response.json()
+        for field in fields:
+            if field.get("dbFieldName") == field_name:
+                return field.get("id", "")
+
+        logger.error(f"Không tìm thấy field {field_name}")
+        return None
+    except Exception as e:
+        logger.error(f"Lỗi khi lấy field ID: {str(e)}")
+        return None
+
+def add_field_to_table(table_id: str, field_payload: dict, headers: dict) -> Optional[str]:
+    """Add a field to existing table"""
+    try:
+        field_url = f"{settings.TEABLE_BASE_URL}/table/{table_id}/field"
+        response = requests.post(field_url, data=json.dumps(field_payload), headers=headers)
+
+        if response.status_code != 201:
+            logger.error(f"Không thể tạo field: {response.text}")
+            return None
+
+        field_id = response.json().get("id", "")
+        logger.info(f"Successfully created field {field_id}")
+        return field_id
+    except Exception as e:
+        logger.error(f"Lỗi khi tạo field: {str(e)}")
+        return None
 
 def update_user_table_id(table_order_id: str = settings.TEABLE_TABLE_ID, record_order_id: str = '', update_fields: dict = '') -> bool:
     """Update user table with new field values"""
@@ -60,10 +102,13 @@ def update_user_table_id(table_order_id: str = settings.TEABLE_TABLE_ID, record_
     update_url = f"{settings.TEABLE_BASE_URL}/table/{table_order_id}/record/{record_order_id}"
     update_payload = json.dumps({
         "fieldKeyType": "dbFieldName",
-        "typecast": True,
         "record": {"fields": update_fields}
     })
-    response = requests.patch(update_url, data=update_payload, headers=headers_teable)
+    try:
+        response = requests.patch(update_url, data=update_payload, headers=headers_teable)
+    except Exception as e:
+        logger.error(f"Không thể cập nhật user table: {str(e)}")
+        return False
     return response.status_code == 200
 
 def upload_attachment_to_teable(field_id: str, record_id: str, table_id: str, file_to_bytes: str, file_name: str):
