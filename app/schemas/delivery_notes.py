@@ -29,5 +29,3 @@ class DeliveryNoteResponse(BaseModel):
     delivery_note_details_ids: List[str]
     order_id: str
     customer_id: str
-    total_items: int
-    total_amount: float

@@ -182,7 +182,7 @@ async def create_product_with_units_service(data: CreateProductWithUnitsRequest,
         user_info = await get_user_table_info(current_user)
 
         product_table_id = user_info.get("table_product_id")
-        unit_conversion_table_id = user_info.get("table_unit_conversion_id")
+        unit_conversion_table_id = user_info.get("table_unit_conversions_id")
         access_token = user_info.get("access_token")
 
         if not all([product_table_id, unit_conversion_table_id, access_token]):

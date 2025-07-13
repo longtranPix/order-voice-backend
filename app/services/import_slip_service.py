@@ -110,7 +110,7 @@ async def create_import_slip_service(data: CreateImportSlipRequest, current_user
         if not import_slip_result["success"]:
             raise HTTPException(
                 status_code=import_slip_result.get("status_code", status.HTTP_400_BAD_REQUEST),
-                detail=f"Không thể tạo phiếu nhập: {import_slip_result.get('error', 'Unknown error')}"
+                detail=f"Không thể tạo phiếu nhập: {import_slip_result.get('error', 'Unknown error')}, import_slip_url: {import_slip_url}, import_slip_payload: {import_slip_payload}"
             )
         
         # Get created import slip info
@@ -172,23 +172,13 @@ async def create_delivery_note_service(data: CreateDeliveryNoteRequest, current_
 
         # Step 3: Create delivery note details first
         detail_records = []
-        total_amount = 0.0
 
         for detail in data.delivery_note_details:
-            # Calculate amounts
-            temp_total = detail.unit_price * detail.quantity
-            vat_amount = temp_total * (detail.vat / 100)
-            final_total = temp_total + vat_amount
-            total_amount += final_total
 
             detail_record = {
                 "fields": {
                     "product_link": [detail.product_id],  # Link to product table
-                    "quantity": detail.quantity,
-                    "unit_price": getattr(detail, 'unit_price', 0),
-                    "vat": getattr(detail, 'vat', 10.0),
-                    "temp_total": temp_total,
-                    "final_total": final_total
+                    "quantity": detail.quantity
                 }
             }
 
@@ -224,10 +214,6 @@ async def create_delivery_note_service(data: CreateDeliveryNoteRequest, current_
             "delivery_type": data.delivery_type
         }
 
-        # Add optional fields if provided
-        if data.notes:
-            delivery_note_fields["notes"] = data.notes
-
         delivery_note_payload = {
             "fieldKeyType": "dbFieldName",
             "typecast": True,
@@ -259,9 +245,7 @@ async def create_delivery_note_service(data: CreateDeliveryNoteRequest, current_
             delivery_note_code=delivery_note_code,
             delivery_note_details_ids=detail_ids,
             order_id=data.order_id,
-            customer_id=data.customer_id,
-            total_items=len(data.delivery_note_details),
-            total_amount=total_amount
+            customer_id=data.customer_id
         )
 
     except HTTPException:

@@ -72,9 +72,9 @@ def get_order_table_payload(customer_table_id: str, detail_table_id: str) -> dic
             {"type": "link", "name": "Khách Hàng", "dbFieldName": "customer_link", "options": {"foreignTableId": customer_table_id, "relationship": "manyOne"}},
             {"type": "link", "name": "Chi Tiết Hóa Đơn", "dbFieldName": "invoice_details", "options": {"foreignTableId": detail_table_id, "relationship": "oneMany"}},
             {"type": "checkbox", "name": "Xuất hoá đơn", "dbFieldName": "invoice_state"},
-            {"type": "number", "name": "Tổng Tạm Tính", "dbFieldName": "total_temp"},
-            {"type": "number", "name": "Tổng VAT", "dbFieldName": "total_vat"},
-            {"type": "number", "name": "Tổng Sau VAT", "dbFieldName": "total_after_vat"},
+            # {"type": "number", "name": "Tổng Tạm Tính", "dbFieldName": "total_temp"},
+            # {"type": "number", "name": "Tổng VAT", "dbFieldName": "total_vat"},
+            # {"type": "number", "name": "Tổng Sau VAT", "dbFieldName": "total_after_vat"},
             {"type": "singleLineText", "name": "Mã hoá đơn", "dbFieldName": "invoice_code"},
             {"type": "attachment", "name": "File hoá đơn", "dbFieldName": "invoice_file"}
         ],
@@ -229,7 +229,8 @@ def get_delivery_note_details_payload(product_table_id: str, unit_conversion_tab
                     "foreignTableId": unit_conversion_table_id,
                     "relationship": "manyOne"
                 }
-            }
+            },
+            {"type": "number", "name": "Số lượng", "dbFieldName": "quantity"}
         ],
         "records": []
     }

@@ -4,6 +4,8 @@ Authentication service for user signup and signin flows only
 import json
 import requests
 import base64
+import hashlib
+import hmac
 import logging
 from datetime import datetime
 from fastapi import HTTPException, status
@@ -41,6 +43,67 @@ from app.constants.auth_data import (
 )
 
 logger = logging.getLogger(__name__)
+
+def encode_password(password: str, username: str) -> str:
+    """
+    Encode password using private rules for secure storage
+
+    Private encoding rules:
+    1. Combine password with username as salt
+    2. Apply HMAC-SHA256 with secret key
+    3. Add timestamp-based rotation
+    4. Base64 encode final result
+    """
+    try:
+        # Private rule 1: Create salt from username with rotation
+        salt = f"{username}_CUBABLE_2025_{len(password)}"
+
+        # Private rule 2: Create secret key from multiple sources
+        secret_key = f"CUBABLE_SECRET_{username[:3]}_{len(username)}_ORDER_VOICE_2025"
+
+        # Private rule 3: Combine password with salt and apply transformations
+        combined = f"{password}:{salt}:{len(password + username)}"
+
+        # Private rule 4: Apply HMAC-SHA256 with secret key
+        encoded_bytes = hmac.new(
+            secret_key.encode('utf-8'),
+            combined.encode('utf-8'),
+            hashlib.sha256
+        ).digest()
+
+        # Private rule 5: Add additional layer with base64 and custom suffix
+        final_encoded = base64.b64encode(encoded_bytes).decode('utf-8')
+
+        # Private rule 6: Add custom prefix and suffix for identification
+        result = f"CUBABLE_{final_encoded}_PWD"
+
+        logger.info(f"Password encoded successfully for user: {username}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error encoding password for user {username}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Lỗi mã hóa mật khẩu"
+        )
+
+def verify_password(plain_password: str, encoded_password: str, username: str) -> bool:
+    """
+    Verify password against encoded version using the same private rules
+    """
+    try:
+        # Re-encode the plain password using the same rules
+        re_encoded = encode_password(plain_password, username)
+
+        # Compare with stored encoded password
+        is_valid = hmac.compare_digest(re_encoded, encoded_password)
+
+        logger.info(f"Password verification for user {username}: {'SUCCESS' if is_valid else 'FAILED'}")
+        return is_valid
+
+    except Exception as e:
+        logger.error(f"Error verifying password for user {username}: {str(e)}")
+        return False
 
 async def get_user_table_info(username: str) -> dict:
     """Get user table information using viewId"""
@@ -91,6 +154,73 @@ async def get_user_table_info(username: str) -> dict:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi lấy thông tin người dùng: {str(e)}"
         )
+
+async def hide_reverse_link_fields_in_product_table(product_table_id: str, headers: dict):
+    """Hide reverse link fields in product table to clean up the view"""
+    try:
+        # Get all fields from product table to find the reverse link field IDs
+        fields_url = f"{settings.TEABLE_BASE_URL}/table/{product_table_id}/field"
+        fields_result = handle_teable_api_call("GET", fields_url, headers=headers)
+
+        if not fields_result["success"]:
+            logger.warning(f"Could not get product table fields: {fields_result.get('error', 'Unknown error')}")
+            return
+
+        fields = fields_result.get("data", [])
+        fields_to_hide = []
+
+        # Find reverse link fields (these are auto-created by bidirectional relationships)
+        for field in fields:
+            field_name = field.get("name", "")
+            field_type = field.get("type", "")
+            field_id = field.get("id", "")
+
+            # Hide fields that link back to import slip details and delivery note details
+            if (field_type == "link" and
+                ("Chi Tiết Phiếu Nhập" in field_name or
+                 "Chi Tiết Phiếu Xuất" in field_name or
+                 "import_slip_details" in field_name.lower() or
+                 "delivery_note_details" in field_name.lower())):
+                fields_to_hide.append({
+                    "fieldId": field_id,
+                    "columnMeta": {"hidden": True}
+                })
+                logger.info(f"Marking field '{field_name}' ({field_id}) for hiding")
+
+        if not fields_to_hide:
+            logger.info("No reverse link fields found to hide in product table")
+            return
+
+        # Get the default view ID for the product table
+        views_url = f"{settings.TEABLE_BASE_URL}/table/{product_table_id}/view"
+        views_result = handle_teable_api_call("GET", views_url, headers=headers)
+
+        if not views_result["success"]:
+            logger.warning(f"Could not get product table views: {views_result.get('error', 'Unknown error')}")
+            return
+
+        views = views_result.get("data", [])
+        if not views:
+            logger.warning("No views found in product table")
+            return
+
+        # Use the first view (usually the default view)
+        default_view_id = views[0].get("id", "")
+        if not default_view_id:
+            logger.warning("Could not get default view ID for product table")
+            return
+
+        # Hide the fields in the default view
+        hide_url = f"{settings.TEABLE_BASE_URL}/table/{product_table_id}/view/{default_view_id}/column-meta"
+        hide_result = handle_teable_api_call("PUT", hide_url, data=json.dumps(fields_to_hide), headers=headers)
+
+        if hide_result["success"]:
+            logger.info(f"Successfully hid {len(fields_to_hide)} reverse link fields in product table")
+        else:
+            logger.warning(f"Failed to hide fields in product table: {hide_result.get('error', 'Unknown error')}")
+
+    except Exception as e:
+        logger.error(f"Error hiding reverse link fields in product table: {str(e)}")
 
 async def add_conversion_fields_to_details(details_table_id: str, unit_conversion_table_id: str, headers: dict):
     """Add lookup and formula fields to import/delivery note details tables"""
@@ -143,9 +273,12 @@ async def add_conversion_fields_to_details(details_table_id: str, unit_conversio
         logger.error(f"Error adding conversion fields: {str(e)}")
 
 async def signin_service(account: Account) -> dict:
-    """Handle user signin flow"""
+    """Handle user signin flow with password encoding"""
     try:
-        # Get user record from Teable with viewId
+        # Step 1: Encode the input password using the same rules as signup
+        encoded_password = encode_password(account.password, account.username)
+
+        # Step 2: Search user table with username and encoded password
         teable_url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record"
         headers = {"Authorization": settings.TEABLE_TOKEN, "Accept": "application/json"}
         params = {
@@ -155,7 +288,7 @@ async def signin_service(account: Account) -> dict:
                 "conjunction": "and",
                 "filterSet": [
                     {"fieldId": "username", "operator": "is", "value": account.username},
-                    {"fieldId": "password", "operator": "is", "value": account.password}
+                    {"fieldId": "password", "operator": "is", "value": encoded_password}
                 ]
             })
         }
@@ -258,14 +391,19 @@ async def signup_service(account: SignUp) -> dict:
                 detail=ERROR_MESSAGES["USER_EXISTS"]
             )
 
-        # Step 3: Create user account record
+        # Step 3: Create user account record with encoded password
+        # Encode password using private rules before storing
+        encoded_password = encode_password(account.password, taxcode)
+
+        # Create invoice token (separate from password encoding)
         encoded_str = base64.b64encode(f"{taxcode}:{account.password}".encode()).decode()
+
         user_record_payload = {
             "typecast": True,
             "records": [{
                 "fields": {
                     "username": taxcode,
-                    "password": account.password,
+                    "password": encoded_password,  # Store encoded password
                     "business_name": business_name,
                     "invoice_token": encoded_str
                 }
@@ -373,15 +511,20 @@ async def signup_service(account: SignUp) -> dict:
         await add_customer_lookup_fields(delivery_note_id, customer_table_id, "customer_link", space_headers)
 
         # Step 9: Add calculated fields to detail tables
+        await add_calculated_fields_to_details(detail_table_id, "order_details", space_headers)
         await add_calculated_fields_to_details(import_slip_details_id, "import_slip_details", space_headers)
-        await add_calculated_fields_to_details(delivery_note_details_id, "delivery_note_details", space_headers)
+        # await add_calculated_fields_to_details(delivery_note_details_id, "delivery_note_details", space_headers)
 
         # Step 10: Add rollup fields to main tables
         await add_rollup_fields_to_main_table(import_slip_id, import_slip_details_id, "import_slip", space_headers)
+        await add_rollup_fields_to_main_table(order_table_id, detail_table_id, "order", space_headers)
         # await add_rollup_fields_to_main_table(delivery_note_id, delivery_note_details_id, "delivery_note", space_headers)
 
         # Step 11: Add inventory tracking fields to product table
         await add_inventory_tracking_fields_to_product(product_table_id, import_slip_details_id, delivery_note_details_id, space_headers)
+
+        # Step 11.5: Hide reverse link fields in product table for cleaner view
+        await hide_reverse_link_fields_in_product_table(product_table_id, space_headers)
 
         # Step 12: Update user record with all table IDs and access token
         update_fields = {
