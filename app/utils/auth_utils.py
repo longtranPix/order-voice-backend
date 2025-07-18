@@ -161,38 +161,39 @@ async def add_customer_lookup_fields(table_id: str, customer_table_id: str, cust
         # Get customer table field IDs
         customer_field_map = await get_field_ids_from_table(customer_table_id, headers)
         customer_fullname_field_id = customer_field_map.get("fullname")
-        customer_phone_field_id = customer_field_map.get("phone_number")
+        # customer_phone_field_id = customer_field_map.get("phone_number")
         
         # Get the table field IDs to find the customer link field
         table_field_map = await get_field_ids_from_table(table_id, headers)
         customer_link_field_id = table_field_map.get(customer_link_field_name)
         
-        if not all([customer_fullname_field_id, customer_phone_field_id, customer_link_field_id]):
+        if not all([customer_fullname_field_id, customer_link_field_id]):
             logger.error(f"Could not find required field IDs for customer lookup in {table_id}")
             return
         
         # Create lookup fields
         lookup_fields = [
             {
-                "type": "lookup",
+                "type": "singleLineText",
                 "name": "Tên Khách Hàng",
                 "dbFieldName": "customer_name",
+                "isLookup": True,
                 "lookupOptions": {
                     "foreignTableId": customer_table_id,
                     "linkFieldId": customer_link_field_id,
                     "lookupFieldId": customer_fullname_field_id
                 }
-            },
-            {
-                "type": "lookup",
-                "name": "Số Điện Thoại KH",
-                "dbFieldName": "customer_phone",
-                "lookupOptions": {
-                    "foreignTableId": customer_table_id,
-                    "linkFieldId": customer_link_field_id,
-                    "lookupFieldId": customer_phone_field_id
-                }
             }
+            # {
+            #     "type": "lookup",
+            #     "name": "Số Điện Thoại KH",
+            #     "dbFieldName": "customer_phone",
+            #     "lookupOptions": {
+            #         "foreignTableId": customer_table_id,
+            #         "linkFieldId": customer_link_field_id,
+            #         "lookupFieldId": customer_phone_field_id
+            #     }
+            # }
         ]
         
         # Create the lookup fields
@@ -206,6 +207,84 @@ async def add_customer_lookup_fields(table_id: str, customer_table_id: str, cust
                 
     except Exception as e:
         logger.error(f"Error adding customer lookup fields to {table_id}: {str(e)}")
+
+async def add_supplier_lookup_fields(table_id: str, supplier_table_id: str, supplier_link_field_name: str, headers: dict):
+    """Add supplier lookup fields to tables that link to supplier"""
+    try:
+        # Get supplier table field IDs
+        supplier_field_map = await get_field_ids_from_table(supplier_table_id, headers)
+        supplier_name_field_id = supplier_field_map.get("supplier_name")
+
+        # Get the table field IDs to find the supplier link field
+        table_field_map = await get_field_ids_from_table(table_id, headers)
+        supplier_link_field_id = table_field_map.get(supplier_link_field_name)
+
+        if not all([supplier_name_field_id, supplier_link_field_id]):
+            logger.error(f"Could not find required field IDs for supplier lookup in {table_id}")
+            return
+
+        # Create lookup field for supplier name
+        lookup_field = {
+            "type": "singleLineText",
+            "name": "Tên Nhà Cung Cấp",
+            "dbFieldName": "supplier_name_lookup",
+            "isLookup": True,
+            "lookupOptions": {
+                "foreignTableId": supplier_table_id,
+                "linkFieldId": supplier_link_field_id,
+                "lookupFieldId": supplier_name_field_id
+            }
+        }
+
+        # Create the lookup field
+        field_url = f"{settings.TEABLE_BASE_URL}/table/{table_id}/field"
+        field_response = requests.post(field_url, data=json.dumps(lookup_field), headers=headers)
+        if field_response.status_code != 201:
+            logger.error(f"Failed to create supplier lookup field in {table_id}: {field_response.text}")
+        else:
+            logger.info(f"Successfully created supplier lookup field in {table_id}")
+
+    except Exception as e:
+        logger.error(f"Error adding supplier lookup fields to {table_id}: {str(e)}")
+
+async def add_product_lookup_fields(table_id: str, product_table_id: str, product_link_field_name: str, headers: dict):
+    """Add product lookup fields to tables that link to product"""
+    try:
+        # Get product table field IDs
+        product_field_map = await get_field_ids_from_table(product_table_id, headers)
+        product_name_field_id = product_field_map.get("product_name")
+
+        # Get the table field IDs to find the product link field
+        table_field_map = await get_field_ids_from_table(table_id, headers)
+        product_link_field_id = table_field_map.get(product_link_field_name)
+
+        if not all([product_name_field_id, product_link_field_id]):
+            logger.error(f"Could not find required field IDs for product lookup in {table_id}")
+            return
+
+        # Create lookup field for product name
+        lookup_field = {
+            "type": "singleLineText",
+            "name": "Tên Sản Phẩm",
+            "isLookup": True,
+            "dbFieldName": "product_name_lookup",
+            "lookupOptions": {
+                "foreignTableId": product_table_id,
+                "linkFieldId": product_link_field_id,
+                "lookupFieldId": product_name_field_id
+            }
+        }
+
+        # Create the lookup field
+        field_url = f"{settings.TEABLE_BASE_URL}/table/{table_id}/field"
+        field_response = requests.post(field_url, data=json.dumps(lookup_field), headers=headers)
+        if field_response.status_code != 201:
+            logger.error(f"Failed to create product lookup field in {table_id}: {field_response.text}")
+        else:
+            logger.info(f"Successfully created product lookup field in {table_id}")
+
+    except Exception as e:
+        logger.error(f"Error adding product lookup fields to {table_id}: {str(e)}")
 
 async def add_inventory_tracking_fields_to_product(product_table_id: str, import_slip_details_id: str, delivery_note_details_id: str, headers: dict):
     """Add inventory tracking fields to product table"""

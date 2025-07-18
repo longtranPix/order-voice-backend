@@ -7,6 +7,7 @@ from app.schemas.delivery_notes import CreateDeliveryNoteRequest, DeliveryNoteDe
 from app.services.import_slip_service import create_delivery_note_service
 from app.services.auth_service import get_user_table_info
 from app.services.teable_service import handle_teable_api_call
+from app.services.plan_status_service import reduce_credit_value_on_order_complete
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ async def create_order_service(data: CreateOrderRequest, current_user: str) -> C
             "records": [{
                 "fields": {
                     "customer_link": [data.customer_id],  # Link to customer table
-                    "invoice_details": detail_ids  # Link to created details
+                    "order_details": detail_ids  # Link to created details
                 }
             }]
         }
@@ -126,6 +127,13 @@ async def create_order_service(data: CreateOrderRequest, current_user: str) -> C
 
         # Create delivery note
         delivery_note_response = await create_delivery_note_service(delivery_note_request, current_user)
+
+        # Step 6: Reduce credit value after successful order completion
+        credit_reduced = await reduce_credit_value_on_order_complete(current_user)
+        if credit_reduced:
+            logger.info(f"Successfully reduced credit value for user {current_user} after order completion")
+        else:
+            logger.warning(f"Failed to reduce credit value for user {current_user}, but order was created successfully")
 
         logger.info(f"Successfully created order {order_id} and delivery note {delivery_note_response.delivery_note_id} for user {current_user}")
 

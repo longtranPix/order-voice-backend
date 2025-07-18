@@ -17,6 +17,8 @@ from app.utils.auth_utils import (
     add_calculated_fields_to_details,
     add_rollup_fields_to_main_table,
     add_customer_lookup_fields,
+    add_supplier_lookup_fields,
+    add_product_lookup_fields,
     add_inventory_tracking_fields_to_product,
     create_token_registry_record,
     get_username_by_token,
@@ -509,6 +511,12 @@ async def signup_service(account: SignUp) -> dict:
         # Step 8: Add customer lookup fields
         await add_customer_lookup_fields(order_table_id, customer_table_id, "customer_link", space_headers)
         await add_customer_lookup_fields(delivery_note_id, customer_table_id, "customer_link", space_headers)
+
+        # Step 8.1: Add supplier lookup fields to import slip table
+        await add_supplier_lookup_fields(import_slip_id, supplier_table_id, "supplier_link", space_headers)
+
+        # Step 8.2: Add product lookup fields to order detail table
+        await add_product_lookup_fields(detail_table_id, product_table_id, "product_link", space_headers)
 
         # Step 9: Add calculated fields to detail tables
         await add_calculated_fields_to_details(detail_table_id, "order_details", space_headers)

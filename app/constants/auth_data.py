@@ -28,7 +28,7 @@ CUSTOMER_TABLE_PAYLOAD = {
 def get_order_detail_table_payload(product_table_id: str, unit_conversion_table_id: str) -> dict:
     """Get order detail table payload with dynamic table IDs"""
     return {
-        "name": "Chi Tiết Hoá Đơn",
+        "name": "Chi Tiết Đơn Hàng",
         "description": "Chi tiết đơn hàng",
         "icon": "🧾",
         "fields": [
@@ -70,7 +70,7 @@ def get_order_table_payload(customer_table_id: str, detail_table_id: str) -> dic
         "fields": [
             {"type": "formula", "name": "Số đơn hàng", "dbFieldName": "order_number", "options": {"expression": "concatenate('DH-', DATETIME_FORMAT(CREATED_TIME(), 'DDMMYYYY'), '-', AUTO_NUMBER())"}},
             {"type": "link", "name": "Khách Hàng", "dbFieldName": "customer_link", "options": {"foreignTableId": customer_table_id, "relationship": "manyOne"}},
-            {"type": "link", "name": "Chi Tiết Hóa Đơn", "dbFieldName": "invoice_details", "options": {"foreignTableId": detail_table_id, "relationship": "oneMany"}},
+            {"type": "link", "name": "Chi Tiết Đơn Hàng", "dbFieldName": "order_details", "options": {"foreignTableId": detail_table_id, "relationship": "oneMany"}},
             {"type": "checkbox", "name": "Xuất hoá đơn", "dbFieldName": "invoice_state"},
             # {"type": "number", "name": "Tổng Tạm Tính", "dbFieldName": "total_temp"},
             # {"type": "number", "name": "Tổng VAT", "dbFieldName": "total_vat"},
@@ -292,7 +292,7 @@ SUPPLIER_TABLE_PAYLOAD = {
     "icon": "🏭",
     "fields": [
         {"type": "autoNumber", "name": "Mã nhà cung cấp", "dbFieldName": "supplier_number"},
-        {"type": "longText", "name": "Tên nhà cung cấp", "dbFieldName": "supplier_name"},
+        {"type": "singleLineText", "name": "Tên nhà cung cấp", "dbFieldName": "supplier_name"},
         {"type": "longText", "name": "Địa chỉ", "dbFieldName": "address"}
     ],
     "fieldKeyType": "dbFieldName",
