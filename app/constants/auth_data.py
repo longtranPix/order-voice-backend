@@ -132,7 +132,7 @@ UNIT_CONVERSION_TABLE_PAYLOAD = {
     "records": []
 }
 
-def get_product_table_payload(unit_conversion_table_id: str) -> dict:
+def get_product_table_payload(unit_conversion_table_id: str, brand_table_id: str) -> dict:
     """Get product table payload with unit conversion link"""
     return {
         "name": "Sản Phẩm",
@@ -153,6 +153,15 @@ def get_product_table_payload(unit_conversion_table_id: str) -> dict:
                 "options": {
                     "foreignTableId": unit_conversion_table_id,
                     "relationship": "manyMany"
+                }
+            },
+            {
+                "type": "link",
+                "name": "Thương hiệu",
+                "dbFieldName": "brand",
+                "options": {
+                    "foreignTableId": brand_table_id,
+                    "relationship": "manyOne"
                 }
             }
         ],
@@ -282,6 +291,19 @@ def get_delivery_note_payload(customer_table_id: str, delivery_note_details_id: 
                     ]
                 }
             }
+        ],
+        "records": []
+    }
+
+def get_brand_table_payload() -> dict:
+    """Get brand table payload"""
+    return {
+        "name": "Thương Hiệu",
+        "description": "Bảng quản lý thương hiệu sản phẩm",
+        "icon": "🔖",
+        "fieldKeyType": "dbFieldName",
+        "fields": [
+            {"type": "singleLineText", "name": "Tên thương hiệu", "dbFieldName": "brand_name"}
         ],
         "records": []
     }

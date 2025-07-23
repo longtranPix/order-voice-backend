@@ -42,6 +42,7 @@ class CreateProductWithUnitsRequest(BaseModel):
     """Schema for creating product with inline unit conversions"""
     product_name: str
     unit_conversions: List[UnitConversionData]
+    brand_id: str = None
 
 class CreatedUnitConversionResponse(BaseModel):
     """Schema for created unit conversion in product response"""
@@ -59,3 +60,4 @@ class CreateProductWithUnitsResponse(BaseModel):
     product_id: str
     product_data: ProductResponse
     created_unit_conversions: List[CreatedUnitConversionResponse]
+    brand_id: str = None

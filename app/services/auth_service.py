@@ -35,6 +35,7 @@ from app.constants.auth_data import (
     get_import_slip_details_payload,
     get_delivery_note_details_payload,
     get_delivery_note_payload,
+    get_brand_table_payload,
     SUPPLIER_TABLE_PAYLOAD,
     get_import_slip_payload,
     VIETQR_API_BASE_URL,
@@ -473,8 +474,12 @@ async def signup_service(account: SignUp) -> dict:
         # Create unit conversion table first
         unit_conversion_table_id = create_table(base_id, UNIT_CONVERSION_TABLE_PAYLOAD, space_headers)
 
+        # Table branding
+        brand_table_payload = get_brand_table_payload()
+        brand_table_id = create_table(base_id, brand_table_payload, space_headers)
+
         # Create product table with link to unit conversion table
-        product_table_payload = get_product_table_payload(unit_conversion_table_id)
+        product_table_payload = get_product_table_payload(unit_conversion_table_id, brand_table_id)
         product_table_id = create_table(base_id, product_table_payload, space_headers)
 
         # Create order detail table with links to product and unit conversion tables
@@ -547,6 +552,7 @@ async def signup_service(account: SignUp) -> dict:
             "table_delivery_note_id": delivery_note_id,
             "table_import_slip_id": import_slip_id,
             "table_supplier_id": supplier_table_id,
+            "table_brand_id": brand_table_id,
             "invoice_token": encoded_str,
             "upload_file_id": upload_file_id,
             "access_token": access_token

@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from app.core.config import settings
 from app.services.teable_service import handle_teable_api_call
 from app.services.auth_service import get_user_table_info
+from app.services.plan_status_service import reduce_credit_value_on_order_complete
 from app.schemas.import_slips import CreateImportSlipRequest, ImportSlipResponse
 from app.schemas.delivery_notes import CreateDeliveryNoteRequest, DeliveryNoteResponse
 
@@ -118,8 +119,15 @@ async def create_import_slip_service(data: CreateImportSlipRequest, current_user
         import_slip_id = import_slip_record.get("id", "")
         import_slip_code = import_slip_record.get("fields", {}).get("import_slip_code", "")
         
+        # Reduce credit value after successful import slip creation
+        credit_reduced = await reduce_credit_value_on_order_complete(current_user)
+        if credit_reduced:
+            logger.info(f"Successfully reduced credit value for user {current_user} after import slip creation")
+        else:
+            logger.warning(f"Failed to reduce credit value for user {current_user}, but import slip was created successfully")
+
         logger.info(f"Successfully created import slip {import_slip_id} for user {current_user}")
-        
+
         return ImportSlipResponse(
             status="success",
             detail="Phiếu nhập đã được tạo thành công",
