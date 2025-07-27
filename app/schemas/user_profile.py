@@ -9,7 +9,7 @@ class UserProfileResponse(BaseModel):
     """Schema for user profile response"""
     username: str
     business_name: str
-    current_plan_name: Optional[str] = None
+    current_plan_name: str
     last_login: Optional[datetime] = None
     time_expired: Optional[datetime] = None
 

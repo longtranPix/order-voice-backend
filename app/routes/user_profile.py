@@ -3,6 +3,7 @@ User profile routes for getting and updating user information
 """
 from fastapi import APIRouter, HTTPException, status, Depends, Header
 from typing import Optional
+import logging
 from app.schemas.user_profile import (
     GetMeResponse, 
     UpdateProfileRequest, 
@@ -14,6 +15,7 @@ from app.services.user_profile_service import (
 from app.services.user_profile_service import get_current_user_profile
 
 router = APIRouter(prefix="/user", tags=["user_profile"])
+logger = logging.getLogger(__name__)
 
 @router.get("/me", response_model=GetMeResponse)
 async def get_me(current_user: dict = Depends(get_current_user_profile)):
@@ -48,6 +50,7 @@ async def get_me(current_user: dict = Depends(get_current_user_profile)):
     try:
         # Convert current_user data to proper response format
         # Import the utility function for datetime parsing
+        logger.info('check: ', current_user)
         from app.services.user_profile_service import parse_datetime_to_gmt7
 
         # Create UserProfileResponse from current_user data

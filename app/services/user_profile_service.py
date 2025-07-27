@@ -43,10 +43,10 @@ async def get_current_user_profile(credentials: HTTPAuthorizationCredentials = D
     """
     try:
         token = credentials.credentials
-        
+        logger.info(f"token: {token}")
         # Get username by token from token list table
         profile = await get_profile_by_token(token)
-        logger.info(f"Authenticated user {profile.get('username')} with token {token[:20]}...")
+        logger.info(f"Authenticated user {profile.get('username')} with token {token[:20]}...", profile)
         
         if not profile:
             raise HTTPException(
