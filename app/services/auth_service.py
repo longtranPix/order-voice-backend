@@ -347,7 +347,7 @@ async def signup_service(account: SignUp) -> dict:
     try:
         # Step 1: Validate taxcode and get business information from VietQR API
         taxcode = account.username
-        business_name = 'Công ty Cổ phần CUBABLE'
+        business_name = f"Shop_{taxcode}"
         # vietqr_url = f"{VIETQR_API_BASE_URL}/{taxcode}"
         
         # try:
