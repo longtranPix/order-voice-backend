@@ -1,7 +1,7 @@
 fastapi
 uvicorn
 requests
-faster-whisper
+# faster-whisper
 pydantic
 python-multipart  # để hỗ trợ UploadFile
 python-dotenv  # để load environment variables từ .env file
