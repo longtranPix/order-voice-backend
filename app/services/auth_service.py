@@ -423,24 +423,26 @@ async def signup_service(account: SignUp) -> dict:
         
         record_id = user_result["data"]["records"][0]["id"]
 
-        # Step 4: Create space and base
+        # Step 4: Create space
         space_name = f"{business_name}{DEFAULT_SPACE_NAME_SUFFIX}"
-        base_name = f"{business_name}{DEFAULT_BASE_NAME_SUFFIX}"
-        
-        space_id = requests.post(f"{settings.TEABLE_BASE_URL}/space", data=json.dumps({"name": space_name}), headers=headers).json()["id"]
-        
+
+        space_response = requests.post(f"{settings.TEABLE_BASE_URL}/space", data=json.dumps({"name": space_name}), headers=headers)
+        if space_response.status_code != 201:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Không thể tạo không gian làm việc: {space_response.text}")
+        space_id = space_response.json()["id"]
+
         # Step 4.1: Generate access token immediately after space creation
         access_token = await generate_space_access_token(space_id, space_name, headers)
         if not access_token:
             logger.warning(f"Could not generate access token for space {space_id}")
             access_token = ""
-        
+
         # Step 4.1.1: Create record in token registry table
         if access_token:
             await create_token_registry_record(taxcode, access_token, headers)
         else:
             logger.warning(f"Skipping token registry record creation due to missing access token")
-        
+
         # Step 4.2: Update headers to use the new space access token for all subsequent operations
         if access_token:
             space_headers = {
@@ -453,110 +455,105 @@ async def signup_service(account: SignUp) -> dict:
             space_headers = headers  # Fallback to original headers if token generation failed
             logger.warning(f"Using fallback headers due to token generation failure")
 
-        # Step 4.3: Create base using the space access token
-        base = requests.post(f"{settings.TEABLE_BASE_URL}/base", data=json.dumps({"spaceId": space_id, "name": base_name, "icon": "📊"}), headers=space_headers)
-        if base.status_code != 201:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Không thể tạo cơ sở dữ liệu: {base.text}")
-        base_id = base.json()["id"]
+        # Step 4.3: Create base from template (NEW APPROACH)
+        template_payload = {
+            "spaceId": space_id,
+            "templateId": "tpl2qOKQjJtcJI3C7R6",
+            "withRecords": False
+        }
 
-        # Step 5: Create Customer table FIRST (optimized - so other tables can link to it immediately)
-        customer_table_url = f"{settings.TEABLE_BASE_URL}/base/{base_id}/table/"
-        customer_table_response = requests.post(customer_table_url, data=json.dumps(CUSTOMER_TABLE_PAYLOAD), headers=space_headers)
-        if customer_table_response.status_code != 201:
-            logger.error(f"Không thể tạo bảng khách hàng: {customer_table_response.text}")
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Không thể tạo bảng khách hàng")
-        
-        customer_table_data = customer_table_response.json()
-        customer_table_id = customer_table_data["id"]
+        base_response = requests.post(
+            f"{settings.TEABLE_BASE_URL}/base/create-from-template",
+            data=json.dumps(template_payload),
+            headers=space_headers
+        )
 
-        # Step 6: Create all other tables using space token and table payloads from constants
+        if base_response.status_code != 201:
+            logger.error(f"Failed to create base from template: {base_response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Không thể tạo cơ sở dữ liệu từ template: {base_response.text}"
+            )
 
-        # Create unit conversion table first
-        unit_conversion_table_id = create_table(base_id, UNIT_CONVERSION_TABLE_PAYLOAD, space_headers)
+        base_data = base_response.json()
+        base_id = base_data["id"]
+        logger.info(f"Successfully created base from template: {base_id}")
 
-        # Table branding
-        brand_table_payload = get_brand_table_payload()
-        brand_table_id = create_table(base_id, brand_table_payload, space_headers)
+        # Step 5: Get all table information from the created base (NEW APPROACH)
+        tables_response = requests.get(
+            f"{settings.TEABLE_BASE_URL}/base/{base_id}/table",
+            headers=space_headers
+        )
 
-        # Create product table with link to unit conversion table
-        product_table_payload = get_product_table_payload(unit_conversion_table_id, brand_table_id)
-        product_table_id = create_table(base_id, product_table_payload, space_headers)
+        if tables_response.status_code != 200:
+            logger.error(f"Failed to get tables from base: {tables_response.text}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Không thể lấy thông tin bảng từ cơ sở dữ liệu: {tables_response.text}"
+            )
 
-        # Create order detail table with links to product and unit conversion tables
-        order_detail_table_payload = get_order_detail_table_payload(product_table_id, unit_conversion_table_id)
-        detail_table_id = create_table(base_id, order_detail_table_payload, space_headers)
+        tables_data = tables_response.json()
+        logger.info(f"Retrieved {len(tables_data)} tables from base {base_id}")
 
-        order_table_payload = get_order_table_payload(customer_table_id, detail_table_id)
-        order_table_id = create_table(base_id, order_table_payload, space_headers)
-        invoice_info_table_id = create_table(base_id, INVOICE_INFO_TABLE_PAYLOAD, space_headers)
-        
-        import_slip_details_payload = get_import_slip_details_payload(product_table_id, unit_conversion_table_id)
-        import_slip_details_id = create_table(base_id, import_slip_details_payload, space_headers)
+        # Step 6: Map table names to IDs based on template structure
+        table_mapping = {}
+        for table in tables_data:
+            table_name = table["name"]
+            table_id = table["id"]
+            table_mapping[table_name] = table_id
+            logger.info(f"Found table: {table_name} -> {table_id}")
 
-        delivery_note_details_payload = get_delivery_note_details_payload(product_table_id, unit_conversion_table_id)
-        delivery_note_details_id = create_table(base_id, delivery_note_details_payload, space_headers)
-        
-        delivery_note_payload = get_delivery_note_payload(customer_table_id, delivery_note_details_id, order_table_id)
-        delivery_note_id = create_table(base_id, delivery_note_payload, space_headers)
+        # Step 7: Extract table IDs based on expected table names from template
+        # Map template table names to our field names in user table
+        table_name_mapping = {
+            "Khách Hàng": "table_customer_id",
+            "Đơn Vị Tính Chuyển Đổi": "table_unit_conversions_id",
+            "Thương Hiệu": "table_brand_id",
+            "Sản Phẩm": "table_product_id",
+            "Chi Tiết Đơn Hàng": "table_order_detail_id",
+            "Đơn Hàng": "table_order_id",
+            "Thông Tin Hóa Đơn": "table_invoice_info_id",
+            "Chi Tiết Phiếu Nhập": "table_import_slip_details_id",
+            "Chi Tiết Phiếu Xuất": "table_delivery_note_details_id",
+            "Phiếu Xuất": "table_delivery_note_id",
+            "Nhà Cung Cấp": "table_supplier_id",
+            "Phiếu Nhập": "table_import_slip_id",
+            "Danh Mục": "table_catalog_id",
+            "Ngành Hàng": "table_product_line_id",
+            "Thuộc Tính": "table_attribute_id",
+            "Tên Thuộc Tính": "table_attribute_type_id"
+        }
 
-        # Create supplier table
-        supplier_table_id = create_table(base_id, SUPPLIER_TABLE_PAYLOAD, space_headers)
+        # Extract table IDs
+        extracted_table_ids = {}
+        for template_name, field_name in table_name_mapping.items():
+            if template_name in table_mapping:
+                extracted_table_ids[field_name] = table_mapping[template_name]
+                logger.info(f"Mapped {template_name} -> {field_name}: {table_mapping[template_name]}")
+            else:
+                logger.warning(f"Table '{template_name}' not found in template base")
 
-        import_slip_payload = get_import_slip_payload(import_slip_details_id, supplier_table_id)
-        import_slip_id = create_table(base_id, import_slip_payload, space_headers)
+        # Step 8: Get upload file field ID from order table
+        order_table_id = extracted_table_ids.get("table_order_id", "")
+        upload_file_id = ""
+        if order_table_id:
+            try:
+                order_field_map = await get_field_ids_from_table(order_table_id, space_headers)
+                upload_file_id = order_field_map.get("invoice_file", "")
+                logger.info(f"Found upload file field ID: {upload_file_id}")
+            except Exception as e:
+                logger.warning(f"Could not get upload file field ID: {str(e)}")
+                upload_file_id = ""
 
-        # Step 6.5: Add lookup and formula fields to import slip details and delivery note details
-        await add_conversion_fields_to_details(import_slip_details_id, unit_conversion_table_id, space_headers)
-        await add_conversion_fields_to_details(delivery_note_details_id, unit_conversion_table_id, space_headers)
-
-        # Step 7: Get upload file field ID
-        order_field_map = await get_field_ids_from_table(order_table_id, space_headers)
-        upload_file_id = order_field_map.get("invoice_file", "")
-
-        # Step 8: Add customer lookup fields
-        await add_customer_lookup_fields(order_table_id, customer_table_id, "customer_link", space_headers)
-        await add_customer_lookup_fields(delivery_note_id, customer_table_id, "customer_link", space_headers)
-
-        # Step 8.1: Add supplier lookup fields to import slip table
-        await add_supplier_lookup_fields(import_slip_id, supplier_table_id, "supplier_link", space_headers)
-
-        # Step 8.2: Add product lookup fields to order detail table
-        await add_product_lookup_fields(detail_table_id, product_table_id, "product_link", space_headers)
-
-        # Step 9: Add calculated fields to detail tables
-        await add_calculated_fields_to_details(detail_table_id, "order_details", space_headers)
-        await add_calculated_fields_to_details(import_slip_details_id, "import_slip_details", space_headers)
-        # await add_calculated_fields_to_details(delivery_note_details_id, "delivery_note_details", space_headers)
-
-        # Step 10: Add rollup fields to main tables
-        await add_rollup_fields_to_main_table(import_slip_id, import_slip_details_id, "import_slip", space_headers)
-        await add_rollup_fields_to_main_table(order_table_id, detail_table_id, "order", space_headers)
-        # await add_rollup_fields_to_main_table(delivery_note_id, delivery_note_details_id, "delivery_note", space_headers)
-
-        # Step 11: Add inventory tracking fields to product table
-        await add_inventory_tracking_fields_to_product(product_table_id, import_slip_details_id, delivery_note_details_id, space_headers)
-
-        # Step 11.5: Hide reverse link fields in product table for cleaner view
-        await hide_reverse_link_fields_in_product_table(product_table_id, space_headers)
-
-        # Step 12: Update user record with all table IDs and access token
+        # Step 9: Update user record with all table IDs and access token
         update_fields = {
-            "table_order_detail_id": detail_table_id,
-            "table_order_id": order_table_id,
-            "table_invoice_info_id": invoice_info_table_id,
-            "table_customer_id": customer_table_id,
-            "table_unit_conversions_id": unit_conversion_table_id,
-            "table_product_id": product_table_id,
-            "table_import_slip_details_id": import_slip_details_id,
-            "table_delivery_note_details_id": delivery_note_details_id,
-            "table_delivery_note_id": delivery_note_id,
-            "table_import_slip_id": import_slip_id,
-            "table_supplier_id": supplier_table_id,
-            "table_brand_id": brand_table_id,
             "invoice_token": encoded_str,
             "upload_file_id": upload_file_id,
             "access_token": access_token
         }
+
+        # Add all extracted table IDs to update fields
+        update_fields.update(extracted_table_ids)
 
         update_success = update_user_table_id(settings.TEABLE_TABLE_ID, record_id, update_fields)
         if not update_success:
@@ -573,18 +570,7 @@ async def signup_service(account: SignUp) -> dict:
                 "base_id": base_id,
                 "access_token": access_token[:20] + "..." if access_token else "Not generated"
             },
-            "tables": {
-                "order_table_id": order_table_id,
-                "order_detail_table_id": detail_table_id,
-                "invoice_info_table_id": invoice_info_table_id,
-                "customer_table_id": customer_table_id,
-                "unit_conversions_table_id": unit_conversion_table_id,
-                "product_table_id": product_table_id,
-                "import_slip_details_id": import_slip_details_id,
-                "delivery_note_details_id": delivery_note_details_id,
-                "delivery_note_id": delivery_note_id,
-                "import_slip_id": import_slip_id
-            },
+            "tables": extracted_table_ids,
             "upload_file_id": upload_file_id
         }
 

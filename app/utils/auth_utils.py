@@ -550,7 +550,7 @@ async def generate_space_access_token(space_id: str, space_name: str, headers: d
             ],
             "expiredTime": "2025-09-28",
             "spaceIds": [space_id],
-            "baseIds": None,
+            "baseIds": ["bseki4xHvepa4Rk69K9"],
             "hasFullAccess": True
         }
         
