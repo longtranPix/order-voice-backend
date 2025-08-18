@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 def handle_teable_api_call(method: str, url: str, **kwargs) -> Dict[str, Any]:
     """Handle Teable API calls with proper error handling and logging"""
     try:
-        logger.info(f"Making {method} request to: {url}")
+        logger.info(f"Making {method} request to: {url} data: {kwargs.get('data')}")
         response = requests.request(method, url, **kwargs)
         logger.info(f"Response status code: {response.status_code}")
         logger.info(f"Response headers: {dict(response.headers)}")

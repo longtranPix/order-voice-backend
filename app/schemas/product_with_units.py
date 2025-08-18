@@ -18,6 +18,7 @@ class CreateProductWithUnitsRequest(BaseModel):
     unit_conversions: List[UnitConversionData]
     brand_id: Optional[str] = None
     attributes_ids: Optional[List[str]] = None
+    catalogs_ids: Optional[List[str]] = None
 
 class CreatedUnitConversionResponse(BaseModel):
     """Schema for created unit conversion response"""
@@ -34,7 +35,7 @@ class ProductWithUnitsResponse(BaseModel):
     product_name: str
     unit_conversions: Optional[List[CreatedUnitConversionResponse]] = None
     brand_id: Optional[str] = None
-    # catalogs_id: Optional[List[str]] = None
+    catalogs_ids: Optional[List[str]] = None
     # product_line_id: Optional[str] = None
     attributes_ids: Optional[List[str]] = None
     # Fields set when only one unit conversion

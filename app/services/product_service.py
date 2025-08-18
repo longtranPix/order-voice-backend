@@ -220,11 +220,12 @@ async def create_product_with_units_service(data: CreateProductWithUnitsRequest,
             product_fields["unit_default"] = unit_data.name_unit  # Text only name unit
             product_fields["price"] = getattr(unit_data, 'price', 0)
             product_fields["vat_rate"] = getattr(unit_data, 'vat', 0)/100
-            # product_fields["catalogs"] = data.catalogs_id
+            product_fields["catalogs"] = data.catalogs_ids
             product_fields["brand"] = data.brand_id
             product_fields["product_name"] = data.product_name
             product_fields["attributes"] = data.attributes_ids
             # product_fields["product_line"] = data.product_line_id
+            logger.info(f"Product fields: {product_fields}")
         else:
             for unit_data in data.unit_conversions:
                 unit_conversion_payload = {
@@ -271,7 +272,7 @@ async def create_product_with_units_service(data: CreateProductWithUnitsRequest,
                 "unit_default": data.unit_conversions[0].name_unit,
                 "unit_conversions": created_unit_conversion_ids,
                 "brand": data.brand_id,
-                # "catalogs": data.catalogs_id,
+                "catalogs": data.catalogs_ids,
                 # "product_line": data.product_line_id
                 "attributes": data.attributes_ids
             }
@@ -315,8 +316,8 @@ async def create_product_with_units_service(data: CreateProductWithUnitsRequest,
             product_id=product_id,
             product_name=product_fields.get("product_name", ""),
             brand_id=_get_linked_field_title(product_fields.get("brand")),
-            attributes_ids=_get_linked_field_titles(product_fields.get("attributes")),
-            # catalogs_id=_get_linked_field_titles(product_fields.get("catalogs")),
+            attributes_ids=_get_linked_field_ids(product_fields.get("attributes")),
+            catalogs_ids=_get_linked_field_ids(product_fields.get("catalogs")),
             # product_line_id=_get_linked_field_title(product_fields.get("product_line"))
         )
 
@@ -371,4 +372,9 @@ def _get_linked_field_titles(field_data):
     """Extract titles from multiple linked field data"""
     if field_data and isinstance(field_data, list):
         return [item.get("title", "") for item in field_data if isinstance(item, dict)]
+    return None
+def _get_linked_field_ids(field_data):
+    """Extract titles from multiple linked field data"""
+    if field_data and isinstance(field_data, list):
+        return [item.get("id", "") for item in field_data if isinstance(item, dict)]
     return None
