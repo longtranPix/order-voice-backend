@@ -12,6 +12,10 @@ class UserProfileResponse(BaseModel):
     current_plan_name: Optional[str] = None
     last_login: Optional[datetime] = None
     time_expired: Optional[datetime] = None
+    tax_code: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_number: Optional[str] = None
+    account_name: Optional[str] = None
 
 class GetMeResponse(BaseModel):
     """Schema for /me API response"""
@@ -22,6 +26,10 @@ class GetMeResponse(BaseModel):
 class UpdateProfileRequest(BaseModel):
     """Schema for update profile request"""
     business_name: Optional[str] = None
+    tax_code: Optional[str] = None
+    bank_name: Optional[str] = None
+    bank_number: Optional[str] = None
+    account_name: Optional[str] = None
     # Add other editable fields as needed
 
 class UpdateProfileResponse(BaseModel):

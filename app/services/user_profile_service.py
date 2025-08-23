@@ -186,7 +186,11 @@ async def get_current_user_profile_by_id(user_id: str) -> UserProfileResponse:
             business_name=fields.get("business_name", ""),
             current_plan_name=fields.get("current_plan_name"),
             last_login=parse_datetime_to_gmt7(fields.get("last_login")),
-            time_expired=parse_datetime_to_gmt7(fields.get("time_expired"))
+            time_expired=parse_datetime_to_gmt7(fields.get("time_expired")),
+            tax_code=fields.get("tax_code"),
+            bank_name=fields.get("bank_name"),
+            bank_number=fields.get("bank_number"),
+            account_name=fields.get("account_name")
         )
 
         return user_profile
@@ -216,12 +220,24 @@ async def update_user_profile_by_authorization(update_data: UpdateProfileRequest
             "Accept": "application/json"
         }
         
-        # Build update payload - only include fields that have values
+        # Build update payload - only include fields that have values (not None)
         update_fields = {}
         
         # Only add fields that are not None
         if update_data.business_name is not None:
             update_fields["business_name"] = update_data.business_name
+        
+        if update_data.tax_code is not None:
+            update_fields["tax_code"] = update_data.tax_code
+            
+        if update_data.bank_name is not None:
+            update_fields["bank_name"] = update_data.bank_name
+            
+        if update_data.bank_number is not None:
+            update_fields["bank_number"] = update_data.bank_number
+            
+        if update_data.account_name is not None:
+            update_fields["account_name"] = update_data.account_name
         
         # If no fields to update, get current profile and return it
         if not update_fields:
