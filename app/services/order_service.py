@@ -86,7 +86,8 @@ async def create_order_service(data: CreateOrderRequest, current_user: str) -> C
             "records": [{
                 "fields": {
                     "customer_link": [data.customer_id],  # Link to customer table
-                    "order_details": detail_ids  # Link to created details
+                    "order_details": detail_ids,  # Link to created details
+                    "payment_method": data.payment_method  # Add payment method
                 }
             }]
         }

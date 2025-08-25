@@ -12,6 +12,7 @@ class CreateOrderRequest(BaseModel):
     customer_id: str  # Changed from customer_name to customer_id
     order_details: List[OrderDetail]
     delivery_type: str = "Xuất bán"  # Default delivery type
+    payment_method: str = "Tiền mặt"  # Default payment method
 
 class CreateOrderResponse(BaseModel):
     """Schema for order creation response"""
