@@ -582,3 +582,87 @@ async def signup_service(account: SignUp) -> dict:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi máy chủ không mong muốn: {str(e)}"
         )
+
+async def change_password_service(change_data: dict) -> dict:
+    """
+    Handle password change flow:
+    1. Login with username + old password
+    2. If successful, update to new password with encoding
+    """
+    try:
+        username = change_data.get("username")
+        old_password = change_data.get("old_password")
+        new_password = change_data.get("new_password")
+        
+        logger.info(f"Attempting password change for user: {username}")
+        
+        # Step 1: Verify old password by attempting login
+        # Encode the old password using the same rules as signup
+        encoded_old_password = encode_password(old_password, username)
+        
+        # Search user table with username and encoded old password
+        teable_url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record"
+        headers = {"Authorization": settings.TEABLE_TOKEN, "Accept": "application/json"}
+        params = {
+            "fieldKeyType": "dbFieldName",
+            "viewId": settings.TEABLE_USER_VIEW_ID,
+            "filter": json.dumps({
+                "conjunction": "and",
+                "filterSet": [
+                    {"fieldId": "username", "operator": "is", "value": username},
+                    {"fieldId": "password", "operator": "is", "value": encoded_old_password}
+                ]
+            })
+        }
+        
+        # Attempt to find user with old password
+        result = handle_teable_api_call("GET", teable_url, params=params, headers=headers)
+        
+        if not result["success"]:
+            raise HTTPException(
+                status_code=result.get("status_code", status.HTTP_400_BAD_REQUEST),
+                detail="Không thể xác thực người dùng"
+            )
+        
+        records = result.get("data", {}).get("records", [])
+        if not records:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Tên đăng nhập hoặc mật khẩu cũ không chính xác"
+            )
+        
+        # Step 2: Old password verification successful, now update to new password
+        user_record = records[0]
+        record_id = user_record["id"]
+        
+        # Encode new password using the same rules as signup
+        encoded_new_password = encode_password(new_password, username)
+        
+        # Update password field
+        update_fields = {"password": encoded_new_password}
+        
+        # Update the user record with new encoded password
+        update_success = update_user_table_id(settings.TEABLE_TABLE_ID, record_id, update_fields)
+        
+        if not update_success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Không thể cập nhật mật khẩu mới"
+            )
+        
+        logger.info(f"Successfully changed password for user: {username}")
+        
+        return {
+            "status": "success",
+            "detail": "Đổi mật khẩu thành công",
+            "username": username
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in change_password_service: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Lỗi máy chủ không mong muốn: {str(e)}"
+        )

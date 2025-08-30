@@ -80,15 +80,22 @@ async def create_order_service(data: CreateOrderRequest, current_user: str) -> C
         detail_ids = [record["id"] for record in detail_records_created]
 
         # Step 4: Create main order
+        # Prepare order fields
+        order_fields = {
+            "customer_link": [data.customer_id],  # Link to customer table
+            "order_details": detail_ids,  # Link to created details
+            "payment_method": data.payment_method  # Add payment method
+        }
+        
+        # Check if payment method is "Chuyển khoản" and add status field
+        if data.payment_method == "Chuyển khoản":
+            order_fields["status"] = "Chưa Thanh Toán"
+        
         order_payload = {
             "fieldKeyType": "dbFieldName",
             "typecast": True,
             "records": [{
-                "fields": {
-                    "customer_link": [data.customer_id],  # Link to customer table
-                    "order_details": detail_ids,  # Link to created details
-                    "payment_method": data.payment_method  # Add payment method
-                }
+                "fields": order_fields
             }]
         }
 
