@@ -19,7 +19,7 @@ app.add_middleware(
 )
 
 # Include routers
-app.include_router(transcription.router, tags=["transcription"])
+# app.include_router(transcription.router, tags=["transcription"])
 app.include_router(auth.router, tags=["authentication"])
 app.include_router(orders.router, tags=["orders"])
 app.include_router(invoices.router, tags=["invoices"])
