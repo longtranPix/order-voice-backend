@@ -1,16 +1,14 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 class OrderDetail(BaseModel):
     product_name: str
     unit_price: float
     quantity: int
-    vat: float
-    temp_total: float
-    final_total: float
+    vat_rate: float
 
 class CreateOrderRequest(BaseModel):
-    customer_name: str
+    order_code: Optional[str] = None
+    customer_name: Optional[str] = None
+    payment_method: Optional[str] = None  # "Chuyển khoản" or "Tiền mặt"
     order_details: List[OrderDetail]
-    order_table_id: str
-    detail_table_id: str

@@ -1,33 +1,3 @@
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
-
-class Account(BaseModel):
-    username: str = Field(..., description="Tax code (e.g., '0316316874')")
-    password: str = Field(..., description="User password")
-
-class SignUp(BaseModel):
-    username: str = Field(..., description="Tax code (e.g., '0316316874')")
-    password: str = Field(..., description="User password")
-
-class SignUpResponse(BaseModel):
-    status: str
-    detail: str
-    account_id: str
-    business_name: str
-    taxcode: str
-    workspace: Dict[str, Any]
-    tables: Dict[str, str]
-    upload_file_id: Optional[str] = None
-
-class SignInResponse(BaseModel):
-    status: str
-    accessToken: str
-    detail: str
-    record: list
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
 """
 User profile schemas for API requests and responses
 """

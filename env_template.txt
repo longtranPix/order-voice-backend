@@ -1,0 +1,50 @@
+# Teable API Configuration
+TEABLE_BASE_URL=https://app.teable.vn/api
+TEABLE_TOKEN=Bearer your_teable_token_here
+TEABLE_TABLE_ID=your_user_table_id
+TEABLE_USER_VIEW_ID=your_user_view_id
+TEABLE_TOKEN_LIST_TABLE_ID=your_token_registry_table_id
+TEABLE_TEMPLATE_ID=tpl2qOKQjJtcJI3C7R6
+TEABLE_PLAN_STATUS_TABLE_ID=your_plan_status_table_id
+
+# Admin credentials for token generation
+TEABLE_ADMIN_EMAIL=admin@example.com
+TEABLE_ADMIN_PASSWORD=admin_password
+
+# External APIs
+VIETQR_BASE_URL=https://api.vietqr.io/v2/business
+
+# Invoice API Configuration
+CREATE_INVOICE_URL=https://api-vinvoice.viettel.vn/services/einvoiceapplication/api/InvoiceAPI/InvoiceWS/createInvoice
+GET_PDF_URL=https://api-vinvoice.viettel.vn/services/einvoiceapplication/api/InvoiceAPI/InvoiceUtilsWS/getInvoiceRepresentationFile
+
+# OpenRouter API Configuration
+OPENROUTER_API_KEY=
+
+# JWT Configuration
+JWT_SECRET_KEY=your-super-secret-jwt-key-here
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
+
+# Password encoding constants
+PASSWORD_PREFIX=CUBABLE_
+PASSWORD_SUFFIX=_PWD
+SECRET_KEY_PREFIX=CUBABLE_SECRET_
+SALT_PREFIX=_CUBABLE_2025_
+
+# Server Configuration
+PORT=8000
+HOST=0.0.0.0
+
+# Database Configuration (if using external database)
+DATABASE_URL=postgresql://user:password@localhost/dbname
+
+# Logging Configuration
+LOG_LEVEL=INFO
+
+# CORS Configuration
+# Use '*' to allow all or comma-separated origins, methods, headers
+CORS_ALLOWED_ORIGINS=*
+CORS_ALLOW_CREDENTIALS=true
+CORS_ALLOWED_METHODS=*
+CORS_ALLOWED_HEADERS=*

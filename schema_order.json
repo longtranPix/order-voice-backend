@@ -1,0 +1,215 @@
+[
+    {
+        "id": "fldWy0YM1oyowC33G7P",
+        "dbFieldName": "order_code",
+        "name": "Mã đơn hàng",
+        "type": "singleLineText",
+        "options": {},
+        "isPrimary": true,
+        "cellValueType": "string",
+        "dbFieldType": "TEXT"
+    },
+    {
+        "id": "fldax1hBKBTJGNcVaKr",
+        "dbFieldName": "customer_name",
+        "name": "Tên Khách Hàng",
+        "type": "singleLineText",
+        "options": {},
+        "cellValueType": "string",
+        "dbFieldType": "TEXT"
+    },
+    {
+        "id": "fldF94D6OFZK5tNNoMI",
+        "dbFieldName": "invoice_state",
+        "name": "Xuất hoá đơn",
+        "type": "checkbox",
+        "options": {},
+        "cellValueType": "boolean",
+        "dbFieldType": "BOOLEAN"
+    },
+    {
+        "id": "fld4N1xhePh4upUCq4g",
+        "dbFieldName": "total_temp",
+        "name": "Tổng Tạm Tính",
+        "type": "rollup",
+        "options": {
+            "expression": "sum({values})",
+            "timeZone": "Asia/Saigon",
+            "formatting": {
+                "precision": 0,
+                "type": "currency",
+                "symbol": "đ "
+            }
+        },
+        "isComputed": true,
+        "lookupOptions": {
+            "foreignTableId": "tbluGmvLY36IVnrwBqE",
+            "lookupFieldId": "fldB2O57pTztI9MmsT7",
+            "linkFieldId": "fldn36qJq00Gb4tJ1gV",
+            "relationship": "oneMany",
+            "fkHostTableName": "bseMWOYa3v39wZZYhYu.New_table_2SJbqUo4rVz",
+            "selfKeyName": "__fk_fld6P8JS0mnGV3wmPnk",
+            "foreignKeyName": "__id"
+        },
+        "cellValueType": "number",
+        "dbFieldType": "REAL"
+    },
+    {
+        "id": "fldX2AsoU4jWBBDmlHw",
+        "dbFieldName": "total_vat_price",
+        "name": "Tổng tiền VAT",
+        "type": "rollup",
+        "options": {
+            "expression": "sum({values})",
+            "timeZone": "Asia/Saigon",
+            "formatting": {
+                "precision": 0,
+                "type": "currency",
+                "symbol": "đ "
+            }
+        },
+        "isComputed": true,
+        "lookupOptions": {
+            "foreignTableId": "tbluGmvLY36IVnrwBqE",
+            "lookupFieldId": "fldP7y6nOFgtG1sPH7v",
+            "linkFieldId": "fldn36qJq00Gb4tJ1gV",
+            "relationship": "oneMany",
+            "fkHostTableName": "bseMWOYa3v39wZZYhYu.New_table_2SJbqUo4rVz",
+            "selfKeyName": "__fk_fld6P8JS0mnGV3wmPnk",
+            "foreignKeyName": "__id"
+        },
+        "cellValueType": "number",
+        "dbFieldType": "REAL"
+    },
+    {
+        "id": "flduLkgZGYHY3K3jLEE",
+        "dbFieldName": "total_with_tax",
+        "name": "Tổng Sau VAT",
+        "type": "rollup",
+        "options": {
+            "expression": "sum({values})",
+            "timeZone": "Asia/Saigon",
+            "formatting": {
+                "precision": 0,
+                "type": "currency",
+                "symbol": "đ "
+            }
+        },
+        "isComputed": true,
+        "lookupOptions": {
+            "foreignTableId": "tbluGmvLY36IVnrwBqE",
+            "lookupFieldId": "fld4kz0ifVOCNRIgxQy",
+            "linkFieldId": "fldn36qJq00Gb4tJ1gV",
+            "relationship": "oneMany",
+            "fkHostTableName": "bseMWOYa3v39wZZYhYu.New_table_2SJbqUo4rVz",
+            "selfKeyName": "__fk_fld6P8JS0mnGV3wmPnk",
+            "foreignKeyName": "__id"
+        },
+        "cellValueType": "number",
+        "dbFieldType": "REAL"
+    },
+    {
+        "id": "fldtbfJK1EPzxtUfCS9",
+        "dbFieldName": "invoice_code",
+        "name": "Mã hoá đơn",
+        "type": "singleLineText",
+        "options": {},
+        "cellValueType": "string",
+        "dbFieldType": "TEXT"
+    },
+    {
+        "id": "fldn51mF6EtRU7vPO8P",
+        "dbFieldName": "invoice_file",
+        "name": "File hoá đơn",
+        "type": "attachment",
+        "options": {},
+        "cellValueType": "string",
+        "isMultipleCellValue": true,
+        "dbFieldType": "JSON"
+    },
+    {
+        "id": "fldn36qJq00Gb4tJ1gV",
+        "dbFieldName": "detail_orders",
+        "name": "Chi tiết đơn hàng",
+        "type": "link",
+        "options": {
+            "relationship": "oneMany",
+            "foreignTableId": "tbluGmvLY36IVnrwBqE",
+            "filterByViewId": null,
+            "visibleFieldIds": null,
+            "filter": null,
+            "isOneWay": false,
+            "symmetricFieldId": "fld6P8JS0mnGV3wmPnk",
+            "lookupFieldId": "fld7fAr64NTk8NH85HT",
+            "fkHostTableName": "bseMWOYa3v39wZZYhYu.New_table_2SJbqUo4rVz",
+            "selfKeyName": "__fk_fld6P8JS0mnGV3wmPnk",
+            "foreignKeyName": "__id"
+        },
+        "cellValueType": "string",
+        "isMultipleCellValue": true,
+        "dbFieldType": "JSON"
+    },
+    {
+        "id": "fldLSb8bwrKeLx3p7oG",
+        "dbFieldName": "created_time",
+        "name": "Ngày tạo đơn hàng",
+        "type": "createdTime",
+        "options": {
+            "formatting": {
+                "date": "YYYY-MM-DD",
+                "time": "None",
+                "timeZone": "Asia/Saigon"
+            },
+            "expression": "CREATED_TIME()"
+        },
+        "isComputed": true,
+        "cellValueType": "dateTime",
+        "dbFieldType": "DATETIME"
+    },
+    {
+        "id": "fldHvOwueYm8Hyv1BSF",
+        "dbFieldName": "payment_method",
+        "name": "Phương thức thanh toán",
+        "type": "singleSelect",
+        "options": {
+            "choices": [
+                {
+                    "name": "Chuyển khoản",
+                    "id": "chofJjdIwCc",
+                    "color": "pinkLight2"
+                },
+                {
+                    "name": "Tiền mặt",
+                    "id": "chokSXC4kfy",
+                    "color": "greenLight1"
+                }
+            ],
+            "preventAutoNewOptions": true
+        },
+        "cellValueType": "string",
+        "dbFieldType": "TEXT"
+    },
+    {
+        "id": "fldJuC34EYtf1MEpMVH",
+        "dbFieldName": "status",
+        "name": "Trạng thái đơn hàng",
+        "type": "singleSelect",
+        "options": {
+            "choices": [
+                {
+                    "name": "Đã thanh toán",
+                    "id": "cho2KgIXLXz",
+                    "color": "blueLight1"
+                },
+                {
+                    "name": "Chưa thanh toán",
+                    "id": "choBWeJ6zXu",
+                    "color": "grayLight2"
+                }
+            ],
+            "preventAutoNewOptions": true
+        },
+        "cellValueType": "string",
+        "dbFieldType": "TEXT"
+    }
+]
