@@ -187,10 +187,51 @@ Response (example):
 }
 ```
 
+### 6) Get order report (/reports/order-report)
+
+Request:
+
+```bash
+curl -X POST "$BASE_URL/reports/order-report" \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "start_date": "2025-01-01T00:00:00Z",
+    "end_date": "2025-01-31T23:59:59Z"
+  }'
+```
+
+Response (example):
+
+```json
+{
+  "status": "success",
+  "message": "Báo cáo đơn hàng được tạo thành công",
+  "data": {
+    "date_range": {
+      "start_date": "2025-01-01T00:00:00Z",
+      "end_date": "2025-01-31T23:59:59Z"
+    },
+    "summary": {
+      "total_orders": 25,
+      "total_temp": 5000000,
+      "total_vat": 500000,
+      "total_with_tax": 5500000
+    },
+    "daily_breakdown": {
+      "2025-01-01": 200000,
+      "2025-01-02": 300000,
+      "2025-01-15": 500000
+    }
+  }
+}
+```
+
 Notes:
 
 - Always pass `Authorization: Bearer $TOKEN` obtained from signin.
 - Order detail fields supported: `product_name` (string), `unit_price` (number), `quantity` (integer), `vat_rate` (percent number).
 - Computed totals in Teable (rollups) are not sent in payload; they are returned in the response for convenience.
 - Plan status is automatically retrieved from the authenticated user's current plan.
+- Report uses `created_time` field to filter orders within the specified date range.
 

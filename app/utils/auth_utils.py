@@ -64,7 +64,7 @@ async def get_user_table_info(user: Union[str, dict]) -> dict:
     try:
         # Extract username from either a dict (from token) or a raw string
         if isinstance(user, dict):
-            username = user.get("sub")
+            username = user.get("username")
         else:
             username = str(user)
 
@@ -75,6 +75,10 @@ async def get_user_table_info(user: Union[str, dict]) -> dict:
         }
 
         # Get user table info with specific viewId
+        logger.info(f"Getting user table info for {username}")
+        logger.info(f"User view ID: {settings.TEABLE_USER_VIEW_ID}")
+        logger.info(f"User table URL: {settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record")
+        logger.info(f"User table ID: {settings.TEABLE_TABLE_ID}")
         user_table_url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record"
         params = {
             "fieldKeyType": "dbFieldName",

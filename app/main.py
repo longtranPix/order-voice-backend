@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import auth, orders, invoices, plan_status, profile
+from app.routes import auth, orders, invoices, plan_status, profile, reports
 from app.core.config import settings
 
 # Configure logging from env
@@ -26,6 +26,7 @@ app.include_router(orders.router, prefix="/orders", tags=["orders"])
 app.include_router(invoices.router, prefix="/invoices", tags=["invoices"])
 app.include_router(profile.router)
 app.include_router(plan_status.router)
+app.include_router(reports.router)
 
 @app.get("/")
 async def root():
