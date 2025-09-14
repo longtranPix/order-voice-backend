@@ -118,6 +118,13 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
                     daily_totals[date_str] = 0
                 daily_totals[date_str] += with_tax
         
+        # Find the day with maximum total
+        max_total_day = 0
+        max_total_date = None
+        if daily_totals:
+            max_total_date = max(daily_totals.keys(), key=lambda x: daily_totals[x])
+            max_total_day = daily_totals[max_total_date]
+        
         # Prepare response data
         report_data = {
             "date_range": {
@@ -128,7 +135,9 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
                 "total_orders": len(records),
                 "total_temp": total_temp,
                 "total_vat": total_vat,
-                "total_with_tax": total_with_tax
+                "total_with_tax": total_with_tax,
+                "max_total_day": max_total_day,
+                "max_total_date": max_total_date
             },
             "daily_breakdown": daily_totals
         }
