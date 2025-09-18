@@ -54,7 +54,7 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
                 "filterSet": [
                     {
                         "fieldId": "created_time",
-                        "operator": "isAfter",
+                        "operator": "isOnOrAfter",
                         "value": {
                             "mode": "exactDate",
                             "exactDate": start_date_str,
@@ -63,7 +63,7 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
                     },
                     {
                         "fieldId": "created_time",
-                        "operator": "isBefore", 
+                        "operator": "isOnOrBefore", 
                         "value": {
                             "mode": "exactDate",
                             "exactDate": end_date_str,
