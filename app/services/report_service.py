@@ -18,8 +18,8 @@ def generate_date_range(start_date_str: str, end_date_str: str) -> List[str]:
     Generate list of all dates between start_date and end_date (inclusive).
     
     Args:
-        start_date_str: Start date in ISO format (e.g., "2025-10-21T11:01:26.000Z")
-        end_date_str: End date in ISO format (e.g., "2025-10-21T11:01:26.000Z")
+        start_date_str: Start date in ISO format (e.g., "2025-10-21T11:01:26.000Z") or simple date (e.g., "2025-10-21")
+        end_date_str: End date in ISO format (e.g., "2025-10-21T11:01:26.000Z") or simple date (e.g., "2025-10-21")
     
     Returns:
         List of date strings in YYYY-MM-DD format
@@ -27,21 +27,22 @@ def generate_date_range(start_date_str: str, end_date_str: str) -> List[str]:
     try:
         logger.info(f"Generating date range from {start_date_str} to {end_date_str}")
         
-        # Handle different ISO format variations
-        def parse_iso_date(date_str: str) -> datetime:
-            # Remove any trailing 'T' characters that might cause issues
-            date_str = date_str.replace('T', 'T', 1) if 'T' in date_str else date_str
+        # Handle different date format variations
+        def parse_date(date_str: str) -> datetime:
+            # Handle simple date format (YYYY-MM-DD)
+            if len(date_str) == 10 and date_str.count('-') == 2:
+                return datetime.fromisoformat(date_str + "T00:00:00+00:00")
             
-            # Handle Z suffix
+            # Handle full ISO datetime format
             if date_str.endswith('Z'):
                 date_str = date_str.replace('Z', '+00:00')
             
             # Parse the datetime
             return datetime.fromisoformat(date_str)
         
-        # Parse ISO datetime strings
-        start_date = parse_iso_date(start_date_str)
-        end_date = parse_iso_date(end_date_str)
+        # Parse date strings
+        start_date = parse_date(start_date_str)
+        end_date = parse_date(end_date_str)
         
         # Convert to date objects (remove time component)
         start_date = start_date.date()
@@ -73,8 +74,8 @@ async def sales_report_service(current_user: str, start_date_str: str, end_date_
     
     Args:
         current_user: Username of the current user
-        start_date_str: Start date in ISO format (e.g., "2025-10-21T11:01:26.000Z")
-        end_date_str: End date in ISO format (e.g., "2025-10-21T11:01:26.000Z")
+        start_date_str: Start date in ISO format (e.g., "2025-10-21T11:01:26.000Z") or simple date (e.g., "2025-10-21")
+        end_date_str: End date in ISO format (e.g., "2025-10-21T11:01:26.000Z") or simple date (e.g., "2025-10-21")
     
     Returns:
     - total: sum of total_after_vat in range
@@ -111,22 +112,7 @@ async def sales_report_service(current_user: str, start_date_str: str, end_date_
         order_url = f"{settings.TEABLE_BASE_URL}/table/{order_table_id}/record"
         params = {
             "fieldKeyType": "dbFieldName",
-            "pageSize": 1000,
-            "filter": json.dumps({
-                "conjunction": "and",
-                "filterSet": [
-                    {
-                        "fieldId": "createdTime",
-                        "operator": "isOnOrAfter",
-                        "value": start_date_str
-                    },
-                    {
-                        "fieldId": "createdTime",
-                        "operator": "isOnOrBefore",
-                        "value": end_date_str
-                    }
-                ]
-            })
+            "pageSize": 1000
         }
 
         result = handle_teable_api_call("GET", order_url, params=params, headers=headers)
@@ -136,9 +122,48 @@ async def sales_report_service(current_user: str, start_date_str: str, end_date_
                 detail=f"Không thể lấy danh sách đơn hàng: {result.get('error', 'Unknown error')}"
             )
 
-        records: List[Dict] = result.get("data", {}).get("records", [])
+        all_records: List[Dict] = result.get("data", {}).get("records", [])
+        
+        # Filter orders by date range on client-side (since Teable API filtering by createdTime is broken)
+        def parse_iso_date(date_str: str, is_start: bool = True) -> datetime:
+            """Parse ISO datetime string or simple date string"""
+            try:
+                # Handle simple date format (YYYY-MM-DD)
+                if len(date_str) == 10 and date_str.count('-') == 2:
+                    # Convert simple date to datetime at start/end of day
+                    if is_start:  # Start date - beginning of day
+                        return datetime.fromisoformat(date_str + "T00:00:00+00:00")
+                    else:  # End date - end of day
+                        return datetime.fromisoformat(date_str + "T23:59:59+00:00")
+                
+                # Handle full ISO datetime format
+                if date_str.endswith('Z'):
+                    date_str = date_str.replace('Z', '+00:00')
+                return datetime.fromisoformat(date_str)
+            except Exception:
+                return None
+        
+        start_date_obj = parse_iso_date(start_date_str, is_start=True)
+        end_date_obj = parse_iso_date(end_date_str, is_start=False)
+        
+        if not start_date_obj or not end_date_obj:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Không thể parse ngày bắt đầu hoặc kết thúc"
+            )
+        
+        # Filter records by date range
+        records = []
+        for record in all_records:
+            created_time_str = record.get("createdTime")
+            if created_time_str:
+                created_time_obj = parse_iso_date(created_time_str)
+                if created_time_obj and start_date_obj <= created_time_obj <= end_date_obj:
+                    records.append(record)
+        
+        logger.info(f"Filtered {len(records)} orders from {len(all_records)} total orders for date range {start_date_str} to {end_date_str}")
 
-        # 4) Generate complete date range
+        # 5) Generate complete date range
         all_dates = generate_date_range(start_date_str, end_date_str)
         if not all_dates:
             raise HTTPException(
@@ -146,10 +171,10 @@ async def sales_report_service(current_user: str, start_date_str: str, end_date_
                 detail="Không thể tạo dải ngày từ dữ liệu đầu vào"
             )
         
-        # 5) Initialize per_day with all dates (set to 0)
+        # 6) Initialize per_day with all dates (set to 0)
         per_day: Dict[str, float] = {date: 0.0 for date in all_dates}
         
-        # 6) Aggregate totals from actual orders
+        # 7) Aggregate totals from actual orders
         total = 0.0
         total_cash = 0.0
         total_transfer = 0.0
@@ -189,7 +214,7 @@ async def sales_report_service(current_user: str, start_date_str: str, end_date_
                 # If day_key is outside our range, still count it in totals but not in per_day
                 logger.warning(f"Order date {day_key} is outside requested range {start_date_str} to {end_date_str}")
 
-        # 7) Create by_days with all dates in chronological order
+        # 8) Create by_days with all dates in chronological order
         by_days = [
             {"date": day, "total": per_day[day]}
             for day in sorted(per_day.keys())
