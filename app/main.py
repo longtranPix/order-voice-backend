@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import transcription, auth, orders, invoices, import_slips, customers, products, unit_conversions, suppliers, plan_status, user_profile
+from app.routes import transcription, auth, orders, invoices, import_slips, customers, products, unit_conversions, suppliers, plan_status, user_profile, reports
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -30,6 +30,7 @@ app.include_router(unit_conversions.router, prefix="/unit-conversions", tags=["u
 app.include_router(suppliers.router, prefix="/suppliers", tags=["suppliers"])
 app.include_router(plan_status.router)
 app.include_router(user_profile.router)
+app.include_router(reports.router)
 
 @app.get("/")
 async def root():

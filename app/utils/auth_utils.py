@@ -6,9 +6,13 @@ import requests
 import logging
 from datetime import datetime
 from app.core.config import settings
+from typing import Dict, Optional, Tuple
+import time
 
 logger = logging.getLogger(__name__)
 
+# Note: Dynamic table ID resolution functions have been removed.
+# The system now uses the old method of storing table IDs directly in user table fields.
 async def get_field_ids_from_table(table_id: str, headers: dict) -> dict:
     """Get field IDs from table using the field API"""
     try:
@@ -432,14 +436,17 @@ async def get_username_by_token(token: str) -> str:
                 ]
             })
         }
-        
+
+        logger.info(f"request: {token_list_url, params}")
         response = requests.get(token_list_url, headers=headers, params=params)
+
         if response.status_code != 200:
             logger.error(f"Failed to get token info: {response.text}")
             return ""
         
         data = response.json()
         records = data.get("records", [])
+        logger.info(f"request: {data}")
         
         if not records:
             logger.warning(f"No user found for token: {token[:20]}...")
@@ -548,7 +555,7 @@ async def generate_space_access_token(space_id: str, space_name: str, headers: d
                 "automation|create", "automation|delete", "automation|read", "automation|update",
                 "user|email_read", "table_record_history|read"
             ],
-            "expiredTime": "2025-09-28",
+            "expiredTime": "2125-09-28",
             "spaceIds": [space_id],
             "baseIds": ["bseki4xHvepa4Rk69K9"],
             "hasFullAccess": True

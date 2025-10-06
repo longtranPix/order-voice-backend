@@ -146,7 +146,32 @@ async def get_user_table_info(username: str) -> dict:
             )
 
         user_fields = records[0].get("fields", {})
-        logger.info(f"Retrieved user table info for {username}")
+        
+        # Add table IDs to the response if they exist
+        table_field_names = [
+            "table_customer_id",
+            "table_unit_conversions_id", 
+            "table_brand_id",
+            "table_product_id",
+            "table_order_detail_id",
+            "table_order_id",
+            "table_invoice_info_id",
+            "table_import_slip_details_id",
+            "table_delivery_note_details_id",
+            "table_delivery_note_id",
+            "table_supplier_id",
+            "table_import_slip_id",
+            "table_catalog_id",
+            "table_attribute_id",
+            "table_attribute_type_id"
+        ]
+        
+        # Ensure all table ID fields are included in the response
+        for field_name in table_field_names:
+            if field_name not in user_fields:
+                user_fields[field_name] = None
+        
+        logger.info(f"Retrieved user table info for {username} with {len([f for f in table_field_names if user_fields.get(f)])} table IDs")
         return user_fields
 
     except HTTPException:
@@ -315,7 +340,7 @@ async def signin_service(account: Account) -> dict:
         record_id = records[0]["id"]
         current_time = datetime.now().isoformat()
         update_fields = {"last_login": current_time}
-        
+
         update_success = update_user_table_id(settings.TEABLE_TABLE_ID, record_id, update_fields)
         if not update_success:
             logger.warning(f"Failed to update last_login for user {account.username}")
@@ -326,11 +351,46 @@ async def signin_service(account: Account) -> dict:
             logger.warning(f"No space token found for user {account.username}, using main token")
             user_token = settings.TEABLE_TOKEN.replace("Bearer ", "")
 
+        # Get user's table IDs from saved fields in user table
+        user_fields = records[0].get("fields", {})
+        base_id = user_fields.get("base_id")
+        space_id = user_fields.get("space_id")
+
+        # Extract table IDs from user fields (old method)
+        tables_map = {}
+        table_field_names = [
+            "table_customer_id",
+            "table_unit_conversions_id", 
+            "table_brand_id",
+            "table_product_id",
+            "table_order_detail_id",
+            "table_order_id",
+            "table_invoice_info_id",
+            "table_import_slip_details_id",
+            "table_delivery_note_details_id",
+            "table_delivery_note_id",
+            "table_supplier_id",
+            "table_import_slip_id",
+            "table_catalog_id",
+            "table_attribute_id",
+            "table_attribute_type_id"
+        ]
+        
+        for field_name in table_field_names:
+            table_id = user_fields.get(field_name)
+            if table_id:
+                tables_map[field_name] = table_id
+                logger.info(f"Retrieved {field_name}: {table_id}")
+        
+        logger.info(f"Retrieved {len(tables_map)} table IDs from user record")
+
         return {
             "status": "success",
             "accessToken": user_token,
             "detail": SUCCESS_MESSAGES["SIGNIN_SUCCESS"],
-            "record": records
+            "record": records,
+            "workspace": {"space_id": space_id, "base_id": base_id},
+            "tables": tables_map
         }
 
     except HTTPException:
@@ -424,7 +484,7 @@ async def signup_service(account: SignUp) -> dict:
         record_id = user_result["data"]["records"][0]["id"]
 
         # Step 4: Create space
-        space_name = f"{business_name}{DEFAULT_SPACE_NAME_SUFFIX}"
+        space_name = f"{business_name}{DEFAULT_SPACE_NAME_SUFFIX}_V3"
 
         space_response = requests.post(f"{settings.TEABLE_BASE_URL}/space", data=json.dumps({"name": space_name}), headers=headers)
         if space_response.status_code != 201:
@@ -479,85 +539,71 @@ async def signup_service(account: SignUp) -> dict:
         base_id = base_data["id"]
         logger.info(f"Successfully created base from template: {base_id}")
 
-        # Step 5: Get all table information from the created base (NEW APPROACH)
-        tables_response = requests.get(
-            f"{settings.TEABLE_BASE_URL}/base/{base_id}/table",
-            headers=space_headers
-        )
-
-        if tables_response.status_code != 200:
-            logger.error(f"Failed to get tables from base: {tables_response.text}")
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Không thể lấy thông tin bảng từ cơ sở dữ liệu: {tables_response.text}"
-            )
-
-        tables_data = tables_response.json()
-        logger.info(f"Retrieved {len(tables_data)} tables from base {base_id}")
-
-        # Step 6: Map table names to IDs based on template structure
-        table_mapping = {}
-        for table in tables_data:
-            table_name = table["name"]
-            table_id = table["id"]
-            table_mapping[table_name] = table_id
-            logger.info(f"Found table: {table_name} -> {table_id}")
-
-        # Step 7: Extract table IDs based on expected table names from template
-        # Map template table names to our field names in user table
-        table_name_mapping = {
-            "Khách Hàng": "table_customer_id",
-            "Đơn Vị Tính Chuyển Đổi": "table_unit_conversions_id",
-            "Thương Hiệu": "table_brand_id",
-            "Sản Phẩm": "table_product_id",
-            "Chi Tiết Đơn Hàng": "table_order_detail_id",
-            "Đơn Hàng": "table_order_id",
-            "Thông Tin Hóa Đơn": "table_invoice_info_id",
-            "Chi Tiết Phiếu Nhập": "table_import_slip_details_id",
-            "Chi Tiết Phiếu Xuất": "table_delivery_note_details_id",
-            "Phiếu Xuất": "table_delivery_note_id",
-            "Nhà Cung Cấp": "table_supplier_id",
-            "Phiếu Nhập": "table_import_slip_id",
-            "Danh Mục": "table_catalog_id",
-            "Ngành Hàng": "table_product_line_id",
-            "Thuộc Tính": "table_attribute_id",
-            "Tên Thuộc Tính": "table_attribute_type_id"
-        }
-
-        # Extract table IDs
-        extracted_table_ids = {}
-        for template_name, field_name in table_name_mapping.items():
-            if template_name in table_mapping:
-                extracted_table_ids[field_name] = table_mapping[template_name]
-                logger.info(f"Mapped {template_name} -> {field_name}: {table_mapping[template_name]}")
+        # Step 5: Get all table IDs from the created base and save them to user table
+        table_ids = {}
+        try:
+            if access_token:
+                # Get all tables from the created base
+                tables_url = f"{settings.TEABLE_BASE_URL}/base/{base_id}/table"
+                tables_headers = {
+                    "Authorization": f"Bearer {access_token}",
+                    "Accept": "application/json"
+                }
+                tables_response = requests.get(tables_url, headers=tables_headers)
+                
+                if tables_response.status_code == 200:
+                    tables_data = tables_response.json()
+                    # Build lookup by dbTableName
+                    dbname_to_id = {t.get("dbTableName"): t.get("id") for t in tables_data}
+                    
+                    # Map table names to user table field names
+                    table_name_mapping = {
+                        "customer": "table_customer_id",
+                        "unit_conversations": "table_unit_conversions_id", 
+                        "brand": "table_brand_id",
+                        "product": "table_product_id",
+                        "order_detail": "table_order_detail_id",
+                        "order": "table_order_id",
+                        "invoice": "table_invoice_info_id",
+                        "import_slip_detail": "table_import_slip_details_id",
+                        "delivery_note_detail": "table_delivery_note_details_id",
+                        "delivery_note": "table_delivery_note_id",
+                        "supplier": "table_supplier_id",
+                        "import_slip": "table_import_slip_id",
+                        "catalog": "table_catalog_id",
+                        "attributes_value": "table_attribute_id",
+                        "attributes_name": "table_attribute_type_id"
+                    }
+                    
+                    # Extract table IDs for each expected table
+                    for table_suffix, field_name in table_name_mapping.items():
+                        db_name = f"{base_id}.{table_suffix}"
+                        if db_name in dbname_to_id:
+                            table_ids[field_name] = dbname_to_id[db_name]
+                            logger.info(f"Found table {table_suffix}: {dbname_to_id[db_name]}")
+                        else:
+                            logger.warning(f"Table {table_suffix} not found in base {base_id}")
+                else:
+                    logger.error(f"Failed to get tables from base {base_id}: {tables_response.text}")
             else:
-                logger.warning(f"Table '{template_name}' not found in template base")
-
-        # Step 8: Get upload file field ID from order table
-        order_table_id = extracted_table_ids.get("table_order_id", "")
-        upload_file_id = ""
-        if order_table_id:
-            try:
-                order_field_map = await get_field_ids_from_table(order_table_id, space_headers)
-                upload_file_id = order_field_map.get("invoice_file", "")
-                logger.info(f"Found upload file field ID: {upload_file_id}")
-            except Exception as e:
-                logger.warning(f"Could not get upload file field ID: {str(e)}")
-                upload_file_id = ""
-
-        # Step 9: Update user record with all table IDs and access token
+                logger.warning("No access token available to fetch table IDs")
+        except Exception as e:
+            logger.error(f"Error fetching table IDs: {str(e)}")
+        
+        # Update user record with base info and all table IDs
         update_fields = {
             "invoice_token": encoded_str,
-            "upload_file_id": upload_file_id,
-            "access_token": access_token
+            "access_token": access_token,
+            "space_id": space_id,
+            "base_id": base_id
         }
-
+        
         # Add all extracted table IDs to update fields
-        update_fields.update(extracted_table_ids)
+        update_fields.update(table_ids)
 
         update_success = update_user_table_id(settings.TEABLE_TABLE_ID, record_id, update_fields)
         if not update_success:
-            logger.warning(f"Failed to update user record with table IDs")
+            logger.warning(f"Failed to update user record with workspace IDs")
 
         return {
             "status": "success",
@@ -569,9 +615,7 @@ async def signup_service(account: SignUp) -> dict:
                 "space_id": space_id,
                 "base_id": base_id,
                 "access_token": access_token[:20] + "..." if access_token else "Not generated"
-            },
-            "tables": extracted_table_ids,
-            "upload_file_id": upload_file_id
+            }
         }
 
     except HTTPException:
