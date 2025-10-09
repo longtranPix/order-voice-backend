@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from app.core.config import settings
 from app.schemas.reports import ReportRequest, ReportResponse
 from app.utils.auth_utils import get_user_table_info
-from datetime import datetime
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -91,37 +91,77 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
         
         logger.info(f"Found {len(records)} orders in date range")
         
+        # Check if start and end date are on the same day
+        is_same_day = start_date.date() == end_date.date()
+        
         # Calculate aggregated statistics
-        total_temp = 0
-        total_vat = 0
-        total_with_tax = 0
+        total = 0
+        total_cash = 0
+        total_transfer = 0
         daily_totals = {}  # Track daily totals
+        hourly_totals = {}  # Track hourly totals for same-day queries
         
         for record in records:
             fields = record.get("fields", {})
             created_time = fields.get("created_time")
+            payment_method = fields.get("payment_method")
             
             # Get totals from rollup fields
-            temp = fields.get("total_temp", 0) or 0
-            vat = fields.get("total_vat_price", 0) or 0
             with_tax = fields.get("total_with_tax", 0) or 0
             
-            total_temp += temp
-            total_vat += vat
-            total_with_tax += with_tax
+            total += with_tax
+            if payment_method == "Tiền mặt":
+                total_cash += with_tax
+            elif payment_method == "Chuyển khoản":
+                total_transfer += with_tax
             
-            # Track daily totals
             if created_time:
-                # Extract date part (YYYY-MM-DD)
-                date_str = created_time.split('T')[0]
+                if is_same_day:
+                    # Track hourly totals for same-day queries
+                    # Parse the datetime string and extract the hour
+                    try:
+                        dt = datetime.fromisoformat(created_time.replace('Z', '+00:00'))
+                        hour = dt.hour
+                        hour_key = f"{hour:02d}h"
+                        if hour_key not in hourly_totals:
+                            hourly_totals[hour_key] = 0
+                        hourly_totals[hour_key] += with_tax
+                    except Exception as e:
+                        logger.warning(f"Failed to parse created_time: {created_time}, error: {e}")
+                else:
+                    # Track daily totals for multi-day queries
+                    date_str = created_time.split('T')[0]
+                    if date_str not in daily_totals:
+                        daily_totals[date_str] = 0
+                    daily_totals[date_str] += with_tax
+        
+        # For same-day queries, ensure all 24 hours are present
+        if is_same_day:
+            for hour in range(24):
+                hour_key = f"{hour:02d}h"
+                if hour_key not in hourly_totals:
+                    hourly_totals[hour_key] = 0
+            # Sort hourly totals by hour
+            hourly_totals = dict(sorted(hourly_totals.items()))
+        else:
+            # For multi-day queries, ensure all days in range are present
+            current_date = start_date.date()
+            end_date_only = end_date.date()
+            while current_date <= end_date_only:
+                date_str = current_date.strftime("%Y-%m-%d")
                 if date_str not in daily_totals:
                     daily_totals[date_str] = 0
-                daily_totals[date_str] += with_tax
+                current_date += timedelta(days=1)
+            # Sort daily totals by date
+            daily_totals = dict(sorted(daily_totals.items()))
         
-        # Find the day with maximum total
+        # Find the day/hour with maximum total
         max_total_day = 0
         max_total_date = None
-        if daily_totals:
+        if is_same_day and hourly_totals:
+            max_total_date = max(hourly_totals.keys(), key=lambda x: hourly_totals[x])
+            max_total_day = hourly_totals[max_total_date]
+        elif daily_totals:
             max_total_date = max(daily_totals.keys(), key=lambda x: daily_totals[x])
             max_total_day = daily_totals[max_total_date]
         
@@ -133,14 +173,19 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
             },
             "summary": {
                 "total_orders": len(records),
-                "total_temp": total_temp,
-                "total_vat": total_vat,
-                "total_with_tax": total_with_tax,
+                "total": total,
+                "total_cash": total_cash,
+                "total_transfer": total_transfer,
                 "max_total_day": max_total_day,
                 "max_total_date": max_total_date
-            },
-            "daily_breakdown": daily_totals
+            }
         }
+        
+        # Add appropriate breakdown based on query type
+        if is_same_day:
+            report_data["breakdown"] = hourly_totals
+        else:
+            report_data["breakdown"] = daily_totals
         
         logger.info(f"Report generated successfully for {len(records)} orders")
         

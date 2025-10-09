@@ -60,6 +60,7 @@ class UpdateProfileRequest(BaseModel):
     bank_name: Optional[str] = None
     bank_number: Optional[str] = None
     account_name: Optional[str] = None
+    password: Optional[str] = None
     # Add other editable fields as needed
 
 class UpdateProfileResponse(BaseModel):

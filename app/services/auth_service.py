@@ -191,7 +191,7 @@ async def generate_space_access_token(space_id: str, space_name: str, headers: d
                 "automation|create", "automation|delete", "automation|read", "automation|update",
                 "user|email_read", "table_record_history|read"
             ],
-            "expiredTime": "2025-09-28",
+            "expiredTime": "2225-09-28",
             "spaceIds": [space_id],
             "baseIds": ["bseki4xHvepa4Rk69K9"],
             "hasFullAccess": True

@@ -3,7 +3,7 @@ User profile service for getting and updating user information
 """
 from fastapi import HTTPException
 from app.schemas.profile import UserProfileResponse
-from app.utils.auth_utils import get_profile_by_token, parse_datetime_to_gmt7
+from app.utils.auth_utils import get_profile_by_token, parse_datetime_to_gmt7, verify_password
 import json
 import logging
 import requests
@@ -129,7 +129,50 @@ async def update_user_profile_by_authorization(update_data: UpdateProfileRequest
                 message="Không có thông tin nào được cập nhật",
                 data=current_profile
             )
-        
+        # If updating any bank-related field, require password verification
+        is_updating_bank_info = any(key in update_fields for key in ["bank_name", "bank_number", "account_name"])
+        if is_updating_bank_info:
+            # Password must be provided when changing bank info
+            if not getattr(update_data, "password", None):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Yêu cầu mật khẩu khi cập nhật thông tin ngân hàng"
+                )
+
+            # Fetch current user record to get username and encoded password
+            get_url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record/{current_user_id}"
+            get_headers = {
+                "Authorization": settings.TEABLE_TOKEN,
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            get_params = {"fieldKeyType": "dbFieldName"}
+
+            get_resp = requests.get(get_url, headers=get_headers, params=get_params)
+            if get_resp.status_code != 200:
+                logger.error(f"Teable API error (fetch for verification): {get_resp.status_code} - {get_resp.text}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Lỗi khi xác minh người dùng: {get_resp.status_code}"
+                )
+
+            user_record = get_resp.json()
+            user_fields = user_record.get("fields", {})
+            stored_password = user_fields.get("password", "")
+            username = user_fields.get("username", "")
+
+            if not stored_password or not username:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Không thể xác minh người dùng"
+                )
+
+            if not verify_password(update_data.password, username, stored_password):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Mật khẩu không hợp lệ"
+                )
+
         # Prepare update payload
         payload = {
             "fieldKeyType": "dbFieldName",
