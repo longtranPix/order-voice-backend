@@ -68,6 +68,48 @@ def generate_date_range(start_date_str: str, end_date_str: str) -> List[str]:
         return []
 
 
+def generate_hours_range() -> List[str]:
+    """
+    Generate list of all 24 hours in format "00h", "01h", ..., "23h"
+    
+    Returns:
+        List of hour strings in HHh format
+    """
+    return [f"{hour:02d}h" for hour in range(24)]
+
+
+def is_same_day(start_date_str: str, end_date_str: str) -> bool:
+    """
+    Check if start_date and end_date are on the same day.
+    
+    Args:
+        start_date_str: Start date in ISO format or simple date
+        end_date_str: End date in ISO format or simple date
+    
+    Returns:
+        True if both dates are on the same day, False otherwise
+    """
+    try:
+        def parse_date(date_str: str) -> datetime:
+            # Handle simple date format (YYYY-MM-DD)
+            if len(date_str) == 10 and date_str.count('-') == 2:
+                return datetime.fromisoformat(date_str + "T00:00:00+00:00")
+            
+            # Handle full ISO datetime format
+            if date_str.endswith('Z'):
+                date_str = date_str.replace('Z', '+00:00')
+            
+            # Parse the datetime
+            return datetime.fromisoformat(date_str)
+        
+        start_date = parse_date(start_date_str).date()
+        end_date = parse_date(end_date_str).date()
+        
+        return start_date == end_date
+    except Exception:
+        return False
+
+
 async def sales_report_service(current_user: str, start_date_str: str, end_date_str: str) -> Dict:
     """
     Build sales report for a date range [start_date, end_date].
@@ -81,7 +123,10 @@ async def sales_report_service(current_user: str, start_date_str: str, end_date_
     - total: sum of total_after_vat in range
     - total_cash: sum where payment_method == "Tiền mặt"
     - total_transfer: sum where payment_method == "Chuyển khoản"
-    - by_days: [{date: YYYY-MM-DD, total: number}] for ALL days in range (including days with 0 sales)
+    - breakdown: Dictionary/object format
+        - If single day: {"00h": 0, "01h": 0, ..., "23h": 0} for ALL 24 hours
+        - If multiple days: {"2025-01-01": 200000, "2025-01-02": 0, ...} for ALL days in range
+    - by_days: (kept for backward compatibility) array format [{date: YYYY-MM-DD, total: number}] for multiple days only
     """
     try:
         # 1) Load user workspace info
@@ -163,71 +208,139 @@ async def sales_report_service(current_user: str, start_date_str: str, end_date_
         
         logger.info(f"Filtered {len(records)} orders from {len(all_records)} total orders for date range {start_date_str} to {end_date_str}")
 
-        # 5) Generate complete date range
-        all_dates = generate_date_range(start_date_str, end_date_str)
-        if not all_dates:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Không thể tạo dải ngày từ dữ liệu đầu vào"
-            )
+        # 5) Check if it's a single day or multiple days
+        single_day = is_same_day(start_date_str, end_date_str)
         
-        # 6) Initialize per_day with all dates (set to 0)
-        per_day: Dict[str, float] = {date: 0.0 for date in all_dates}
-        
-        # 7) Aggregate totals from actual orders
+        # 6) Aggregate totals from actual orders
         total = 0.0
         total_cash = 0.0
         total_transfer = 0.0
-
-        for rec in records:
-            fields = rec.get("fields", {})
-            total_after_vat = fields.get("total_after_vat") or fields.get("final_total") or 0
-            payment_method = fields.get("payment_method", "")
+        
+        if single_day:
+            # Single day: break down by hours (00h - 23h)
+            logger.info("Single day detected - generating hourly breakdown")
+            all_hours = generate_hours_range()
+            per_hour: Dict[str, float] = {hour: 0.0 for hour in all_hours}
             
-            # Get createdTime from record level (system field)
-            created_time = rec.get("createdTime")
+            for rec in records:
+                fields = rec.get("fields", {})
+                total_after_vat = fields.get("total_after_vat") or fields.get("final_total") or 0
+                payment_method = fields.get("payment_method", "")
+                
+                # Get createdTime from record level (system field)
+                created_time = rec.get("createdTime")
 
-            # Sum global totals
-            try:
-                amount = float(total_after_vat)
-            except Exception:
-                amount = 0.0
+                # Sum global totals
+                try:
+                    amount = float(total_after_vat)
+                except Exception:
+                    amount = 0.0
 
-            total += amount
-            if payment_method == "Tiền mặt":
-                total_cash += amount
-            if payment_method == "Chuyển khoản":
-                total_transfer += amount
+                total += amount
+                if payment_method == "Tiền mặt":
+                    total_cash += amount
+                if payment_method == "Chuyển khoản":
+                    total_transfer += amount
 
-            # Group by day (YYYY-MM-DD)
-            day_key = None
-            if isinstance(created_time, str) and len(created_time) >= 10:
-                day_key = created_time[:10]
-            else:
-                # Fallback: no date string; skip grouping
+                # Group by hour (HHh format)
+                hour_key = None
+                if isinstance(created_time, str):
+                    try:
+                        # Parse the datetime to extract hour
+                        if created_time.endswith('Z'):
+                            created_time_parsed = created_time.replace('Z', '+00:00')
+                        else:
+                            created_time_parsed = created_time
+                        dt = datetime.fromisoformat(created_time_parsed)
+                        hour_key = f"{dt.hour:02d}h"
+                    except Exception as e:
+                        logger.warning(f"Failed to parse hour from {created_time}: {str(e)}")
+                        hour_key = None
+
+                if hour_key and hour_key in per_hour:
+                    per_hour[hour_key] += amount
+                    logger.info(f"Added {amount:,.0f} VND to hour {hour_key}")
+                elif hour_key:
+                    logger.warning(f"Hour {hour_key} is not in expected range")
+
+            # Create breakdown as dictionary with hour keys
+            breakdown = {hour: per_hour[hour] for hour in all_hours}
+            
+            return {
+                "status": "success",
+                "total": total,
+                "total_cash": total_cash,
+                "total_transfer": total_transfer,
+                "breakdown": breakdown,
+                "count": len(records)
+            }
+        
+        else:
+            # Multiple days: break down by days
+            logger.info("Multiple days detected - generating daily breakdown")
+            all_dates = generate_date_range(start_date_str, end_date_str)
+            if not all_dates:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Không thể tạo dải ngày từ dữ liệu đầu vào"
+                )
+            
+            # Initialize per_day with all dates (set to 0)
+            per_day: Dict[str, float] = {date: 0.0 for date in all_dates}
+            
+            for rec in records:
+                fields = rec.get("fields", {})
+                total_after_vat = fields.get("total_after_vat") or fields.get("final_total") or 0
+                payment_method = fields.get("payment_method", "")
+                
+                # Get createdTime from record level (system field)
+                created_time = rec.get("createdTime")
+
+                # Sum global totals
+                try:
+                    amount = float(total_after_vat)
+                except Exception:
+                    amount = 0.0
+
+                total += amount
+                if payment_method == "Tiền mặt":
+                    total_cash += amount
+                if payment_method == "Chuyển khoản":
+                    total_transfer += amount
+
+                # Group by day (YYYY-MM-DD)
                 day_key = None
+                if isinstance(created_time, str) and len(created_time) >= 10:
+                    day_key = created_time[:10]
+                else:
+                    # Fallback: no date string; skip grouping
+                    day_key = None
 
-            if day_key and day_key in per_day:
-                per_day[day_key] += amount
-                logger.info(f"Added {amount:,.0f} VND to {day_key}")
-            elif day_key:
-                # If day_key is outside our range, still count it in totals but not in per_day
-                logger.warning(f"Order date {day_key} is outside requested range {start_date_str} to {end_date_str}")
+                if day_key and day_key in per_day:
+                    per_day[day_key] += amount
+                    logger.info(f"Added {amount:,.0f} VND to {day_key}")
+                elif day_key:
+                    # If day_key is outside our range, still count it in totals but not in per_day
+                    logger.warning(f"Order date {day_key} is outside requested range {start_date_str} to {end_date_str}")
 
-        # 8) Create by_days with all dates in chronological order
-        by_days = [
-            {"date": day, "total": per_day[day]}
-            for day in sorted(per_day.keys())
-        ]
+            # Create breakdown as dictionary with date keys (sorted by date)
+            breakdown = {day: per_day[day] for day in sorted(per_day.keys())}
+            
+            # Keep by_days for backward compatibility (array format)
+            by_days = [
+                {"date": day, "total": per_day[day]}
+                for day in sorted(per_day.keys())
+            ]
 
-        return {
-            "status": "success",
-            "total": total,
-            "total_cash": total_cash,
-            "total_transfer": total_transfer,
-            "by_days": by_days,
-            "count": len(records)
-        }
+            return {
+                "status": "success",
+                "total": total,
+                "total_cash": total_cash,
+                "total_transfer": total_transfer,
+                "breakdown": breakdown,
+                "by_days": by_days,
+                "count": len(records)
+            }
 
     except HTTPException:
         raise

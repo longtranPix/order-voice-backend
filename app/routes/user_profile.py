@@ -90,14 +90,21 @@ async def update_profile(
     **Headers:**
     - Authorization: Bearer {access_token}
     
-    **Request Body:**
+    **Request Body (Basic Update):**
     ```json
     {
         "business_name": "Công ty Cổ phần CUBABLE Updated",
-        "tax_code": "0123456789",
+        "tax_code": "0123456789"
+    }
+    ```
+    
+    **Request Body (Bank Info Update - Requires Password):**
+    ```json
+    {
         "bank_name": "Vietcombank",
         "bank_number": "1234567890",
-        "account_name": "Công ty Cổ phần CUBABLE"
+        "account_name": "Công ty Cổ phần CUBABLE",
+        "password": "your_password"
     }
     ```
     
@@ -120,9 +127,27 @@ async def update_profile(
     }
     ```
     
+    **Error Responses:**
+    
+    Missing password when updating bank info (400):
+    ```json
+    {
+        "detail": "Vui lòng nhập mật khẩu để xác nhận cập nhật thông tin ngân hàng"
+    }
+    ```
+    
+    Wrong password (401):
+    ```json
+    {
+        "detail": "Mật khẩu không chính xác"
+    }
+    ```
+    
     **Notes:**
     - Tất cả các trường đều là optional
     - Chỉ những trường có giá trị (không null) mới được cập nhật
+    - **⚠️ Khi cập nhật `bank_name` hoặc `bank_number`, trường `password` là BẮT BUỘC để xác thực**
+    - Mật khẩu sẽ được verify trước khi cho phép cập nhật thông tin ngân hàng
     - Trường với giá trị `null` hoặc `None` sẽ không được đưa vào payload cập nhật
     - Nếu không có trường nào được cung cấp để cập nhật, API sẽ trả về profile hiện tại mà không thay đổi
     """

@@ -14,6 +14,7 @@ from app.schemas.user_profile import (
     UpdateProfileResponse,
     UserProfileResponse
 )
+from app.services.auth_service import verify_password
 
 
 logger = logging.getLogger(__name__)
@@ -207,9 +208,56 @@ async def get_current_user_profile_by_id(user_id: str) -> UserProfileResponse:
 async def update_user_profile_by_authorization(update_data: UpdateProfileRequest, current_user_id) -> UpdateProfileResponse:
     """
     Update user profile information by Authorization header with Teable token
+    Password verification required when updating bank_name or bank_number
     """
     logger.info(f"Updating user profile for user ID: {current_user_id}")
     try:
+        # Check if updating bank-related fields
+        is_updating_bank_info = (
+            update_data.bank_name is not None or 
+            update_data.bank_number is not None
+        )
+        
+        # If updating bank info, password verification is required
+        if is_updating_bank_info:
+            # Check if password is provided
+            if not update_data.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Vui lòng nhập mật khẩu để xác nhận cập nhật thông tin ngân hàng"
+                )
+            
+            # Get current user profile to retrieve username and stored password
+            api_url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record/{current_user_id}"
+            headers = {
+                "Authorization": settings.TEABLE_TOKEN,
+                "Content-Type": "application/json",
+                "Accept": "application/json"
+            }
+            params = {"fieldKeyType": "dbFieldName"}
+            
+            response = requests.get(api_url, headers=headers, params=params)
+            if response.status_code != 200:
+                logger.error(f"Failed to get user info: {response.text}")
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Không thể xác thực thông tin người dùng"
+                )
+            
+            user_record = response.json()
+            fields = user_record.get("fields", {})
+            username = fields.get("username", "")
+            stored_password = fields.get("password", "")
+            
+            # Verify password
+            if not verify_password(update_data.password, stored_password, username):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Mật khẩu không chính xác"
+                )
+            
+            logger.info(f"Password verified successfully for user: {username}")
+        
         # Prepare the API URL for update
         api_url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record/{current_user_id}"
         
@@ -223,7 +271,7 @@ async def update_user_profile_by_authorization(update_data: UpdateProfileRequest
         # Build update payload - only include fields that have values (not None)
         update_fields = {}
         
-        # Only add fields that are not None
+        # Only add fields that are not None (exclude password field)
         if update_data.business_name is not None:
             update_fields["business_name"] = update_data.business_name
         

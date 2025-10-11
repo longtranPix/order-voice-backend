@@ -13,9 +13,24 @@ async def sales_report(
 ):
     """
     Sales report for a date range (inclusive).
-    Supports both formats:
+    
+    **Date Formats Supported:**
     - ISO format: "2025-10-21T11:01:26.000Z"
     - Simple date: "2025-10-21"
+    
+    **Breakdown Behavior:**
+    - **Single Day (start_date = end_date):** Returns hourly breakdown object with all 24 hours
+      - Example: `{"00h": 0, "01h": 0, "09h": 200000, "14h": 300000, ..., "23h": 0}`
+    - **Multiple Days:** Returns daily breakdown object with all dates in range
+      - Example: `{"2025-01-01": 200000, "2025-01-02": 0, "2025-01-03": 0, "2025-01-04": 0, "2025-01-05": 300000}`
+    
+    **Response Fields:**
+    - `total`: Total sales amount
+    - `total_cash`: Total cash payments
+    - `total_transfer`: Total bank transfer payments
+    - `count`: Number of orders
+    - `breakdown`: Dictionary/Object with hour keys (single day) or date keys (multiple days)
+    - `by_days`: (Multi-day only) Array format [{date, total}], kept for backward compatibility
     """
     return await sales_report_service(current_user, start_date, end_date)
 
