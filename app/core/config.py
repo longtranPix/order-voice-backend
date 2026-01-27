@@ -11,6 +11,7 @@ class Settings:
     TEABLE_TABLE_ID: str = os.getenv("TEABLE_TABLE_ID", "tblj52nsIFcIWDAW4fr")
     TEABLE_USER_VIEW_ID: str = os.getenv("TEABLE_USER_VIEW_ID", "viwWOH429ek2bW3eU06")
     TEABLE_TOKEN_LIST_TABLE_ID: str = os.getenv("TEABLE_TOKEN_LIST_TABLE_ID", "tblR7dckuSizsZlhW47")
+    TEABLE_TEMPLATE_ID: str = os.getenv("TEABLE_TEMPLATE_ID", "tplrmexazXRQKBzHEtu")
     
     # Invoice API Configuration (Fallback URLs - now using dynamic URLs from user config)
     CREATE_INVOICE_URL: str = os.getenv("CREATE_INVOICE_URL", "https://api-vinvoice.viettel.vn/services/einvoiceapplication/api/InvoiceAPI/InvoiceWS/createInvoice")

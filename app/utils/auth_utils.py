@@ -511,30 +511,29 @@ async def get_token_by_username(username: str) -> str:
         logger.error(f"Error getting token by username: {str(e)}")
         return ""
 
-async def generate_space_access_token(space_id: str, space_name: str, headers: dict) -> str:
+async def generate_space_access_token(space_id: str, space_name: str, headers: dict, session_cookie: str = None) -> str:
     """Generate access token for the created space"""
     try:
-        # Step 1: Sign in to Teable to get session
-        signin_url = f"{settings.TEABLE_BASE_URL}/auth/signin"
-        signin_payload = {
-            "email": settings.TEABLE_ADMIN_EMAIL,
-            "password": settings.TEABLE_ADMIN_PASSWORD
-        }
-        
-        signin_response = requests.post(signin_url, json=signin_payload, headers=headers)
-        if signin_response.status_code != 200:
-            logger.error(f"Failed to signin to Teable: {signin_response.text}")
-            return ""
-        
-        # Get session cookie from signin response
-        session_cookie = None
-        if 'Set-Cookie' in signin_response.headers:
-            cookies = signin_response.headers['Set-Cookie']
-            # Extract auth_session cookie
-            for cookie in cookies.split(','):
-                if 'auth_session=' in cookie:
-                    session_cookie = cookie.split(';')[0]
-                    break
+        # Step 1: Get session cookie (either provided or sign in as admin)
+        if not session_cookie:
+            signin_url = f"{settings.TEABLE_BASE_URL}/auth/signin"
+            signin_payload = {
+                "email": settings.TEABLE_ADMIN_EMAIL,
+                "password": settings.TEABLE_ADMIN_PASSWORD
+            }
+            
+            signin_response = requests.post(signin_url, json=signin_payload, headers=headers)
+            if signin_response.status_code != 200:
+                logger.error(f"Failed to signin to Teable: {signin_response.text}")
+                return ""
+            
+            if 'Set-Cookie' in signin_response.headers:
+                cookies = signin_response.headers['Set-Cookie']
+                # Extract auth_session cookie
+                for cookie in cookies.split(','):
+                    if 'auth_session=' in cookie:
+                        session_cookie = cookie.split(';')[0]
+                        break
         
         # Step 2: Create access token for the space
         access_token_url = f"{settings.TEABLE_BASE_URL}/access-token"

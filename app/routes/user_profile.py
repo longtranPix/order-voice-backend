@@ -62,7 +62,8 @@ async def get_me(current_user: dict = Depends(get_current_user_profile)):
             tax_code=current_user.get("tax_code"),
             bank_name=current_user.get("bank_name"),
             bank_number=current_user.get("bank_number"),
-            account_name=current_user.get("account_name")
+            account_name=current_user.get("account_name"),
+            upload_file_id=current_user.get("upload_file_id")
         )
 
         return GetMeResponse(

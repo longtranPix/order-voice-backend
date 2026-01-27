@@ -7,6 +7,7 @@ class Account(BaseModel):
 class SignUp(BaseModel):
     username: str  # This will be used as taxcode
     password: str
+    email: str
 
 class ChangePasswordRequest(BaseModel):
     username: str

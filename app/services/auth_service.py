@@ -163,7 +163,8 @@ async def get_user_table_info(username: str) -> dict:
             "table_import_slip_id",
             "table_catalog_id",
             "table_attribute_id",
-            "table_attribute_type_id"
+            "table_attribute_type_id",
+            "upload_file_id"
         ]
         
         # Ensure all table ID fields are included in the response
@@ -373,7 +374,8 @@ async def signin_service(account: Account) -> dict:
             "table_import_slip_id",
             "table_catalog_id",
             "table_attribute_id",
-            "table_attribute_type_id"
+            "table_attribute_type_id",
+            "upload_file_id"
         ]
         
         for field_name in table_field_names:
@@ -405,33 +407,56 @@ async def signin_service(account: Account) -> dict:
 async def signup_service(account: SignUp) -> dict:
     """Handle user signup flow"""
     try:
-        # Step 1: Validate taxcode and get business information from VietQR API
+        # Step 1: Call Teable Signup API to get user_id and session cookie
+        teable_signup_url = "https://app.teable.vn/api/auth/signup"
+        signup_payload = {
+            "email": account.email,
+            "password": account.password
+        }
+        
+        try:
+            signup_response = requests.post(teable_signup_url, json=signup_payload)
+            logger.info(f"Teable signup response status: {signup_response.status_code}")
+            
+            if signup_response.status_code == 201 or signup_response.status_code == 200:
+                signup_data = signup_response.json()
+                teable_user_id = signup_data.get("id")
+                
+                # Extract auth_session cookie
+                session_cookie = None
+                if 'Set-Cookie' in signup_response.headers:
+                    cookies = signup_response.headers['Set-Cookie']
+                    for cookie in cookies.split(','):
+                        if 'auth_session=' in cookie:
+                            session_cookie = cookie.split(';')[0]
+                            break
+                            
+                if not teable_user_id:
+                    raise HTTPException(status_code=400, detail="Không nhận được ID người dùng từ hệ thống")
+                if not session_cookie:
+                    raise HTTPException(status_code=400, detail="Không nhận được phiên làm việc từ hệ thống")
+                    
+                logger.info(f"Teable signup success. UserID: {teable_user_id}")
+            else:
+                error_detail = signup_response.text
+                try:
+                    error_json = signup_response.json()
+                    if "message" in error_json:
+                        error_detail = error_json["message"]
+                except:
+                    pass
+                raise HTTPException(status_code=400, detail=f"Lỗi đăng ký hệ thống: {error_detail}")
+
+        except requests.RequestException as e:
+            logger.error(f"Teable signup connection error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Không thể kết nối đến hệ thống đăng ký")
+
+        # Step 2: Proceed with local user creation
+        # Validate taxcode and get business information
         taxcode = account.username
         business_name = f"Shop_{taxcode}"
-        # vietqr_url = f"{VIETQR_API_BASE_URL}/{taxcode}"
-        
-        # try:
-        #     vietqr_response = requests.get(vietqr_url, timeout=10)
-        #     if vietqr_response.status_code != 200:
-        #         raise HTTPException(
-        #             status_code=status.HTTP_400_BAD_REQUEST,
-        #             detail=ERROR_MESSAGES["INVALID_TAXCODE"]
-        #         )
-            
-        #     vietqr_data = vietqr_response.json()
-        #     business_name = vietqr_data.get("data", {}).get("name", "")
-        #     if not business_name:
-        #         raise HTTPException(
-        #             status_code=status.HTTP_400_BAD_REQUEST,
-        #             detail=ERROR_MESSAGES["INVALID_TAXCODE"]
-        #         )
-        # except requests.RequestException:
-        #     raise HTTPException(
-        #         status_code=status.HTTP_400_BAD_REQUEST,
-        #         detail=ERROR_MESSAGES["INVALID_TAXCODE"]
-        #     )
 
-        # Step 2: Check if user already exists
+        # Check if user already exists
         existing_user_url = f"{settings.TEABLE_BASE_URL}/table/{settings.TEABLE_TABLE_ID}/record"
         headers = {
             "Authorization": settings.TEABLE_TOKEN,
@@ -454,11 +479,8 @@ async def signup_service(account: SignUp) -> dict:
                 detail=ERROR_MESSAGES["USER_EXISTS"]
             )
 
-        # Step 3: Create user account record with encoded password
-        # Encode password using private rules before storing
+        # Create user account record with encoded password and user_id
         encoded_password = encode_password(account.password, taxcode)
-
-        # Create invoice token (separate from password encoding)
         encoded_str = base64.b64encode(f"{taxcode}:{account.password}".encode()).decode()
 
         user_record_payload = {
@@ -466,9 +488,11 @@ async def signup_service(account: SignUp) -> dict:
             "records": [{
                 "fields": {
                     "username": taxcode,
-                    "password": encoded_password,  # Store encoded password
+                    "password": encoded_password,
                     "business_name": business_name,
-                    "invoice_token": encoded_str
+                    "invoice_token": encoded_str,
+                    "user_id": teable_user_id, # Store Teable User ID
+                    "email": account.email
                 }
             }],
             "fieldKeyType": "dbFieldName"
@@ -483,21 +507,42 @@ async def signup_service(account: SignUp) -> dict:
         
         record_id = user_result["data"]["records"][0]["id"]
 
-        # Step 4: Create space
+        # Step 3: Create workspace using the user's session cookie
         space_name = f"{business_name}{DEFAULT_SPACE_NAME_SUFFIX}_V3"
 
-        space_response = requests.post(f"{settings.TEABLE_BASE_URL}/space", data=json.dumps({"name": space_name}), headers=headers)
+        # Headers for space creation request (using cookie)
+        cookie_headers = {
+            "Content-Type": "application/json",
+            "Cookie": session_cookie
+        }
+
+        space_response = requests.post(f"{settings.TEABLE_BASE_URL}/space", data=json.dumps({"name": space_name}), headers=cookie_headers)
         if space_response.status_code != 201:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Không thể tạo không gian làm việc: {space_response.text}")
         space_id = space_response.json()["id"]
 
-        # Step 4.1: Generate access token immediately after space creation
-        access_token = await generate_space_access_token(space_id, space_name, headers)
+        # Step 4: Generate access token for the space (using user's session cookie)
+        access_token = await generate_space_access_token(space_id, space_name, headers, session_cookie=session_cookie)
         if not access_token:
             logger.warning(f"Could not generate access token for space {space_id}")
             access_token = ""
 
-        # Step 4.1.1: Create record in token registry table
+        # Step 4.1: Invite longtran.pix@gmail.com and anh.tran@teable.vn to the workspace
+        try:
+            invite_url = f"{settings.TEABLE_BASE_URL}/space/{space_id}/invitation/email"
+            invite_payload = {
+                "emails": ["longtran.pix@gmail.com", "anh.tran@teable.vn"],
+                "role": "owner"
+            }
+            invite_response = requests.post(invite_url, json=invite_payload, headers=cookie_headers)
+            if invite_response.status_code in [200, 201]:
+                logger.info(f"Successfully invited longtran.pix@gmail.com and anh.tran@teable.vn to space {space_id}")
+            else:
+                logger.error(f"Failed to invite users to space {space_id}: {invite_response.text}")
+        except Exception as e:
+            logger.error(f"Error inviting users to space {space_id}: {str(e)}")
+
+        # Create record in token registry table
         if access_token:
             await create_token_registry_record(taxcode, access_token, headers)
         else:
@@ -512,20 +557,23 @@ async def signup_service(account: SignUp) -> dict:
             }
             logger.info(f"Switching to space access token for all subsequent operations")
         else:
-            space_headers = headers  # Fallback to original headers if token generation failed
-            logger.warning(f"Using fallback headers due to token generation failure")
+            space_headers = cookie_headers 
+            logger.warning(f"Using cookie headers due to token generation failure")
 
-        # Step 4.3: Create base from template (NEW APPROACH)
+        # Step 6: Create base from template (NEW APPROACH)
+        # User request: Use cookie to create base instead of token
         template_payload = {
             "spaceId": space_id,
-            "templateId": "tpl2qOKQjJtcJI3C7R6",
+            # "templateId": "tpl2qOKQjJtcJI3C7R6",
+            "templateId": settings.TEABLE_TEMPLATE_ID,
             "withRecords": False
         }
 
+        # Use cookie_headers for base creation as requested
         base_response = requests.post(
             f"{settings.TEABLE_BASE_URL}/base/create-from-template",
             data=json.dumps(template_payload),
-            headers=space_headers
+            headers=cookie_headers
         )
 
         if base_response.status_code != 201:
@@ -539,58 +587,62 @@ async def signup_service(account: SignUp) -> dict:
         base_id = base_data["id"]
         logger.info(f"Successfully created base from template: {base_id}")
 
-        # Step 5: Get all table IDs from the created base and save them to user table
+        # Step 7: Get all table IDs from the created base and save them to user table
         table_ids = {}
         try:
-            if access_token:
-                # Get all tables from the created base
-                tables_url = f"{settings.TEABLE_BASE_URL}/base/{base_id}/table"
-                tables_headers = {
-                    "Authorization": f"Bearer {access_token}",
-                    "Accept": "application/json"
-                }
-                tables_response = requests.get(tables_url, headers=tables_headers)
+            # Get all tables from the created base
+            tables_url = f"{settings.TEABLE_BASE_URL}/base/{base_id}/table"
+            # For fetching tables, we should also use cookie headers since we used it for creation
+            tables_response = requests.get(tables_url, headers=cookie_headers)
+            
+            if tables_response.status_code == 200:
+                tables_data = tables_response.json()
+                # Build lookup by display Name
+                name_to_id = {t.get("name"): t.get("id") for t in tables_data}
                 
-                if tables_response.status_code == 200:
-                    tables_data = tables_response.json()
-                    # Build lookup by dbTableName
-                    dbname_to_id = {t.get("dbTableName"): t.get("id") for t in tables_data}
-                    
-                    # Map table names to user table field names
-                    table_name_mapping = {
-                        "customer": "table_customer_id",
-                        "unit_conversations": "table_unit_conversions_id", 
-                        "brand": "table_brand_id",
-                        "product": "table_product_id",
-                        "order_detail": "table_order_detail_id",
-                        "order": "table_order_id",
-                        "invoice": "table_invoice_info_id",
-                        "import_slip_detail": "table_import_slip_details_id",
-                        "delivery_note_detail": "table_delivery_note_details_id",
-                        "delivery_note": "table_delivery_note_id",
-                        "supplier": "table_supplier_id",
-                        "import_slip": "table_import_slip_id",
-                        "catalog": "table_catalog_id",
-                        "attributes_value": "table_attribute_id",
-                        "attributes_name": "table_attribute_type_id"
-                    }
-                    
-                    # Extract table IDs for each expected table
-                    for table_suffix, field_name in table_name_mapping.items():
-                        db_name = f"{base_id}.{table_suffix}"
-                        if db_name in dbname_to_id:
-                            table_ids[field_name] = dbname_to_id[db_name]
-                            logger.info(f"Found table {table_suffix}: {dbname_to_id[db_name]}")
-                        else:
-                            logger.warning(f"Table {table_suffix} not found in base {base_id}")
-                else:
-                    logger.error(f"Failed to get tables from base {base_id}: {tables_response.text}")
+                # Map table display names to user table field names
+                table_name_mapping = {
+                    "Khách Hàng": "table_customer_id",
+                    "Thương Hiệu": "table_brand_id",
+                    "Danh Mục": "table_catalog_id",
+                    "Sản Phẩm": "table_product_id",
+                    "Tên Thuộc Tính": "table_attribute_type_id",
+                    "Thuộc Tính": "table_attribute_id",
+                    "Đơn Vị Tính Chuyển Đổi": "table_unit_conversions_id",
+                    "Chi Tiết Đơn Hàng": "table_order_detail_id",
+                    "Đơn Hàng": "table_order_id",
+                    "Invoice Table": "table_invoice_info_id",
+                    "Chi Tiết Phiếu Nhập": "table_import_slip_details_id",
+                    "Phiếu Nhập": "table_import_slip_id",
+                    "Chi Tiết Phiếu Xuất": "table_delivery_note_details_id",
+                    "Phiếu Xuất": "table_delivery_note_id",
+                    "Nhà Cung Cấp": "table_supplier_id"
+                }
+                
+                # Extract table IDs for each expected table name
+                for display_name, field_name in table_name_mapping.items():
+                    if display_name in name_to_id:
+                        table_ids[field_name] = name_to_id[display_name]
+                        logger.info(f"Found table '{display_name}': {name_to_id[display_name]}")
+                        
+                        # Special case: If this is the Order table, get the invoice_file field ID
+                        if display_name == "Đơn Hàng":
+                            try:
+                                order_fields = await get_field_ids_from_table(name_to_id[display_name], cookie_headers)
+                                if "invoice_file" in order_fields:
+                                    table_ids["upload_file_id"] = order_fields["invoice_file"]
+                                    logger.info(f"Found 'invoice_file' field ID: {order_fields['invoice_file']}")
+                            except Exception as e:
+                                logger.error(f"Error getting fields for Order table: {str(e)}")
+                    else:
+                        logger.warning(f"Table '{display_name}' not found in base {base_id}")
             else:
-                logger.warning("No access token available to fetch table IDs")
+                logger.error(f"Failed to get tables from base {base_id}: {tables_response.text}")
+
         except Exception as e:
             logger.error(f"Error fetching table IDs: {str(e)}")
         
-        # Update user record with base info and all table IDs
+        # Step 8: Update user record with base info and all table IDs
         update_fields = {
             "invoice_token": encoded_str,
             "access_token": access_token,
@@ -614,7 +666,7 @@ async def signup_service(account: SignUp) -> dict:
             "workspace": {
                 "space_id": space_id,
                 "base_id": base_id,
-                "access_token": access_token[:20] + "..." if access_token else "Not generated"
+                "access_token": access_token
             }
         }
 

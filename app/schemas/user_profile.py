@@ -16,6 +16,7 @@ class UserProfileResponse(BaseModel):
     bank_name: Optional[str] = None
     bank_number: Optional[str] = None
     account_name: Optional[str] = None
+    upload_file_id: Optional[str] = None
 
 class GetMeResponse(BaseModel):
     """Schema for /me API response"""
