@@ -8,7 +8,7 @@ import hashlib
 import hmac
 import logging
 from datetime import datetime
-from fastapi import HTTPException, status
+from fastapi import HTTPException, status, BackgroundTasks
 from app.core.config import settings
 from app.services.teable_service import handle_teable_api_call, create_table, update_user_table_id, get_field_id_by_name, add_field_to_table
 from app.schemas.auth import Account, SignUp
@@ -183,6 +183,42 @@ async def get_user_table_info(username: str) -> dict:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Lỗi khi lấy thông tin người dùng: {str(e)}"
         )
+
+async def process_post_signup_tasks(
+    taxcode: str,
+    access_token: str,
+    headers: dict,
+    space_id: str,
+    cookie_headers: dict
+):
+    """
+    Handle background tasks after successful signup:
+    1. Create token registry record
+    2. Send invitations to workspace
+    """
+    try:
+        # 1. Create record in token registry table
+        if access_token:
+            # Note: create_token_registry_record is async but uses sync requests incorrectly. 
+            # We await it here as it is defined as async.
+            await create_token_registry_record(taxcode, access_token, headers)
+        else:
+            logger.warning(f"Skipping token registry record creation due to missing access token")
+
+        # 2. Invite longtran.pix@gmail.com and anh.tran@teable.vn to the workspace
+        invite_url = f"{settings.TEABLE_BASE_URL}/space/{space_id}/invitation/email"
+        invite_payload = {
+            "emails": ["longtran.pix@gmail.com", "anh.tran@teable.vn"],
+            "role": "owner"
+        }
+        invite_response = requests.post(invite_url, json=invite_payload, headers=cookie_headers)
+        if invite_response.status_code in [200, 201]:
+            logger.info(f"Successfully invited longtran.pix@gmail.com and anh.tran@teable.vn to space {space_id}")
+        else:
+            logger.error(f"Failed to invite users to space {space_id}: {invite_response.text}")
+            
+    except Exception as e:
+        logger.error(f"Error in post-signup background tasks: {str(e)}")
 
 async def hide_reverse_link_fields_in_product_table(product_table_id: str, headers: dict):
     """Hide reverse link fields in product table to clean up the view"""
@@ -404,7 +440,7 @@ async def signin_service(account: Account) -> dict:
             detail=f"Lỗi máy chủ không mong muốn: {str(e)}"
         )
 
-async def signup_service(account: SignUp) -> dict:
+async def signup_service(account: SignUp, background_tasks: BackgroundTasks) -> dict:
     """Handle user signup flow"""
     try:
         # Step 1: Call Teable Signup API to get user_id and session cookie
@@ -527,38 +563,18 @@ async def signup_service(account: SignUp) -> dict:
             logger.warning(f"Could not generate access token for space {space_id}")
             access_token = ""
 
-        # Step 4.1: Invite longtran.pix@gmail.com and anh.tran@teable.vn to the workspace
-        try:
-            invite_url = f"{settings.TEABLE_BASE_URL}/space/{space_id}/invitation/email"
-            invite_payload = {
-                "emails": ["longtran.pix@gmail.com", "anh.tran@teable.vn"],
-                "role": "owner"
-            }
-            invite_response = requests.post(invite_url, json=invite_payload, headers=cookie_headers)
-            if invite_response.status_code in [200, 201]:
-                logger.info(f"Successfully invited longtran.pix@gmail.com and anh.tran@teable.vn to space {space_id}")
-            else:
-                logger.error(f"Failed to invite users to space {space_id}: {invite_response.text}")
-        except Exception as e:
-            logger.error(f"Error inviting users to space {space_id}: {str(e)}")
 
-        # Create record in token registry table
-        if access_token:
-            await create_token_registry_record(taxcode, access_token, headers)
-        else:
-            logger.warning(f"Skipping token registry record creation due to missing access token")
+        # Step 5: Schedule background tasks (Token registry & Invitations)
+        background_tasks.add_task(
+            process_post_signup_tasks,
+            taxcode=taxcode,
+            access_token=access_token,
+            headers=headers,
+            space_id=space_id,
+            cookie_headers=cookie_headers
+        )
 
         # Step 4.2: Update headers to use the new space access token for all subsequent operations
-        if access_token:
-            space_headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-                "Accept": "application/json"
-            }
-            logger.info(f"Switching to space access token for all subsequent operations")
-        else:
-            space_headers = cookie_headers 
-            logger.warning(f"Using cookie headers due to token generation failure")
 
         # Step 6: Create base from template (NEW APPROACH)
         # User request: Use cookie to create base instead of token

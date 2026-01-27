@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 from app.schemas.auth import Account, SignUp, ChangePasswordRequest, ChangePasswordResponse
 from app.services.auth_service import signin_service, signup_service, change_password_service
 
@@ -10,9 +10,9 @@ async def signin(account: Account):
     return await signin_service(account)
 
 @router.post("/signup")
-async def signup(account: SignUp):
+async def signup(account: SignUp, background_tasks: BackgroundTasks):
     """User signup endpoint"""
-    return await signup_service(account)
+    return await signup_service(account, background_tasks)
 
 @router.post("/change-password", response_model=ChangePasswordResponse)
 async def change_password(change_data: ChangePasswordRequest):
