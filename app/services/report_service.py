@@ -41,9 +41,16 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
             "Accept": "application/json"
         }
         
-        # Format dates for Teable API - start date to beginning of day, end date to end of day
-        start_date_str = start_date.strftime("%Y-%m-%dT00:00:00.000Z")
-        end_date_str = end_date.strftime("%Y-%m-%dT23:59:59.999Z")
+        # Get start of day and end of day in local time (GMT+7)
+        local_start = datetime(start_date.year, start_date.month, start_date.day, 0, 0, 0)
+        local_end = datetime(end_date.year, end_date.month, end_date.day, 23, 59, 59, 999000)
+        
+        # Convert local GMT+7 times to UTC for Teable API filters
+        utc_start = local_start - timedelta(hours=7)
+        utc_end = local_end - timedelta(hours=7)
+        
+        start_date_str = utc_start.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        end_date_str = utc_end.strftime("%Y-%m-%dT%H:%M:%S.999Z")
         
         # Query orders within date range using created_time field with proper Teable filter format
         order_url = f"{settings.TEABLE_BASE_URL}/table/{order_table_id}/record"
@@ -116,24 +123,26 @@ async def get_order_report_service(current_user: dict, start_date: datetime, end
                 total_transfer += with_tax
             
             if created_time:
-                if is_same_day:
-                    # Track hourly totals for same-day queries
-                    # Parse the datetime string and extract the hour
-                    try:
-                        dt = datetime.fromisoformat(created_time.replace('Z', '+00:00'))
-                        hour = dt.hour
+                try:
+                    # Convert created_time from UTC to local time (GMT+7)
+                    dt_utc = datetime.fromisoformat(created_time.replace('Z', '+00:00'))
+                    dt_local = dt_utc + timedelta(hours=7)
+                    
+                    if is_same_day:
+                        # Track hourly totals for same-day queries
+                        hour = dt_local.hour
                         hour_key = f"{hour:02d}h"
                         if hour_key not in hourly_totals:
                             hourly_totals[hour_key] = 0
                         hourly_totals[hour_key] += with_tax
-                    except Exception as e:
-                        logger.warning(f"Failed to parse created_time: {created_time}, error: {e}")
-                else:
-                    # Track daily totals for multi-day queries
-                    date_str = created_time.split('T')[0]
-                    if date_str not in daily_totals:
-                        daily_totals[date_str] = 0
-                    daily_totals[date_str] += with_tax
+                    else:
+                        # Track daily totals for multi-day queries
+                        date_str = dt_local.strftime("%Y-%m-%d")
+                        if date_str not in daily_totals:
+                            daily_totals[date_str] = 0
+                        daily_totals[date_str] += with_tax
+                except Exception as e:
+                    logger.warning(f"Failed to parse created_time: {created_time}, error: {e}")
         
         # For same-day queries, ensure all 24 hours are present
         if is_same_day:
